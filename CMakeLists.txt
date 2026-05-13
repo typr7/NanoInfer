@@ -12,3 +12,9 @@ include(cmake/dependencies.cmake)
 add_executable(tvllm main.cpp)
 
 target_link_libraries(tvllm PRIVATE CUDA::cudart)
+target_link_libraries(
+    tvllm PRIVATE
+    CUDA::cudart
+    CUDA::cublas
+    nlohmann_json::nlohmann_json
+)
