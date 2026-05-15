@@ -9,7 +9,14 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 
 include(cmake/dependencies.cmake)
 
-add_executable(tvllm main.cpp)
+add_executable(tvllm
+    src/main.cpp
+    src/inference.cpp
+    src/kernels.cu
+    src/kernels.h
+    src/macro.h
+    src/llama.h
+)
 
 target_link_libraries(tvllm PRIVATE CUDA::cudart)
 target_link_libraries(
