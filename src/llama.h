@@ -6,6 +6,15 @@
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
+inline constexpr std::size_t MAX_TOKEN_LEN = 512;
+inline constexpr std::size_t HIDDEN_DIM = 2048;
+inline constexpr std::size_t HEAD_DIM = 64;
+
+// GQA
+inline constexpr std::size_t Q_PROJ_DIM = 2048;
+inline constexpr std::size_t K_PROJ_DIM = 512;
+inline constexpr std::size_t Q_HEAD_NUM = Q_PROJ_DIM / HEAD_DIM;
+inline constexpr std::size_t K_HEAD_NUM = K_PROJ_DIM / HEAD_DIM;
 
 struct Llama3_2
 {
