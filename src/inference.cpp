@@ -11,7 +11,6 @@
 
 std::vector<std::int32_t> inference(const std::vector<std::int32_t>& input_tokens, const Llama3_2& weight)
 {
-    constexpr float eps = 0.00001f;
 
     std::size_t token_num = input_tokens.size();
     // embedding

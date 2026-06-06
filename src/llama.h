@@ -6,6 +6,8 @@
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
+#include "tensor.h"
+
 inline constexpr std::size_t MAX_TOKEN_LEN = 512;
 inline constexpr std::size_t HIDDEN_DIM = 2048;
 inline constexpr std::size_t HEAD_DIM = 64;
@@ -26,6 +28,7 @@ struct Llama3_2
     std::array<__nv_bfloat16*, 16> q_proj = {};
     std::array<__nv_bfloat16*, 16> k_proj = {};
     std::array<__nv_bfloat16*, 16> v_proj = {};
+    std::array<__nv_bfloat16*, 16> qkv_proj = {};
     std::array<__nv_bfloat16*, 16> o_proj = {};
 
         // ffn
@@ -65,6 +68,7 @@ struct Llama3_2
             q_proj = other.q_proj;
             k_proj = other.k_proj;
             v_proj = other.v_proj;
+            qkv_proj = other.qkv_proj;
             o_proj = other.o_proj;
 
             gate_proj = other.gate_proj;

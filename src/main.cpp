@@ -96,6 +96,7 @@ void loadWeightToGPU(std::ifstream& file, __nv_bfloat16* dst, std::size_t weight
 
 Llama3_2 loadLlamaWeight(const std::string& safetensors_path)
 {
+    // TODO: rearrange qkv proj weight
     std::ifstream safetensors_file(safetensors_path, std::ios::binary);
 
     if (!safetensors_file) {

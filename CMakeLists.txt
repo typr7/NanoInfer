@@ -14,12 +14,15 @@ add_executable(tvllm
     src/residual_connection.h
     src/grouped_query_attention.cpp
     src/grouped_query_attention.h
+    src/device_arena.hpp
     src/kernels.cu
     src/kernels.h
     src/main.cpp
     src/inference.cpp
     src/macro.h
+    src/llama.cpp
     src/llama.h
+    src/tensor.h
 )
 
 target_link_libraries(tvllm PRIVATE CUDA::cudart)
