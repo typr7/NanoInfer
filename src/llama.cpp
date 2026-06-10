@@ -5,11 +5,11 @@
 #include "llama.h"
 #include "macro.h"
 #include "device_arena.hpp"
-#include "kernels.h"
-#include "softmax.h"
-#include "residual_connection.h"
-#include "rope.h"
-#include "swiglu.h"
+#include "kernels/attention_softmax.h"
+#include "kernels/residual_connection.h"
+#include "kernels/rms_norm.h"
+#include "kernels/rope.h"
+#include "kernels/swiglu.h"
 
 
 void run_llama_layer_prefill(

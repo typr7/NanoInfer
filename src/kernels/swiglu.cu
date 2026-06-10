@@ -1,6 +1,8 @@
 #include "swiglu.h"
-#include "llama.h"
+#include "../llama.h"
 
+
+namespace {
 
 __device__ __forceinline__
 float swiglu(float gate, float up)
@@ -27,6 +29,8 @@ void swiglu_inplace_kernel(
         gate[idx] = static_cast<__nv_bfloat16>(swiglu(gate_val, up_val));
     }
 }
+
+} // namespace
 
 // gate_up layout per token: [gate, up], gate = up * SiLU(gate)
 void launch_swiglu_inplace_kernel(

@@ -1,6 +1,8 @@
-#include "llama.h"
+#include "../llama.h"
 #include "residual_connection.h"
 
+
+namespace {
 
 inline constexpr std::size_t HALF_HIDDEN_DIM = HIDDEN_DIM / 2;
 
@@ -15,7 +17,7 @@ void residual_connection_kernel_v1(
     hidden_state[idx + HALF_HIDDEN_DIM] += residual[idx + HALF_HIDDEN_DIM];
 }
 
-void launch_residual_connection_kernel_v1(
+[[maybe_unused]] void launch_residual_connection_kernel_v1(
     std::size_t token_count,
     const __nv_bfloat16* __restrict__ residual,
     __nv_bfloat16* __restrict__ hidden_state,
@@ -34,7 +36,7 @@ void residual_connection_kernel_v2(
     hidden_state[idx] = __hadd2(residual[idx], hidden_state[idx]);
 }
 
-void launch_residual_connection_kernel_v2(
+[[maybe_unused]] void launch_residual_connection_kernel_v2(
     std::size_t token_count,
     const __nv_bfloat16* __restrict__ residual,
     __nv_bfloat16* __restrict__ hidden_state,
@@ -72,6 +74,8 @@ void launch_residual_connection_kernel_v3(
         reinterpret_cast<__nv_bfloat162*>(hidden_state)
     );
 }
+
+} // namespace
 
 void launch_residual_connection_kernel(
     std::size_t token_count,

@@ -1,6 +1,8 @@
 #include "rope.h"
-#include "llama.h"
+#include "../llama.h"
 
+
+namespace {
 
 __global__
 void rope_kernel(
@@ -28,6 +30,8 @@ void rope_kernel(
         key[key_idx + 1] = even_value * sin_theta + odd_value * cos_theta;
     }
 }
+
+} // namespace
 
 void launch_rope_kernel(
     std::size_t token_count,

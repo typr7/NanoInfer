@@ -1,7 +1,9 @@
 #include <cuda_bf16.h>
 
-#include "softmax.h"
+#include "attention_softmax.h"
 
+
+namespace {
 
 __global__
 void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
@@ -51,6 +53,8 @@ void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
     }
     attention_scores[idx] = softmax_value;
 }
+
+} // namespace
 
 void launch_attention_softmax_prefill_kernel(
     std::size_t head_count,

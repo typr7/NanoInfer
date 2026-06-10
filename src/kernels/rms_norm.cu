@@ -1,38 +1,9 @@
-#include <cmath>
-#include <stdexcept>
+#include "rms_norm.h"
 
-#include <cuda_bf16.h>
-#include <cublas_v2.h>
-
-#include "kernels.h"
-#include "llama.h"
+#include "../llama.h"
 
 
-__global__
-void token_embedding_kernel(
-    const std::int32_t* __restrict__ token_ids,
-    const __nv_bfloat16* __restrict__ embedding_table,
-    __nv_bfloat16* __restrict__ hidden_state
-) {
-    const int dst = blockIdx.x * HIDDEN_DIM + threadIdx.x;
-    const int src = token_ids[blockIdx.x] * HIDDEN_DIM + threadIdx.x;
-    hidden_state[dst] = embedding_table[src];
-    hidden_state[dst + HIDDEN_DIM / 2] = embedding_table[src + HIDDEN_DIM / 2];
-}
-
-void launch_token_embedding_kernel(
-    std::size_t token_count,
-    const std::int32_t* token_ids,
-    const __nv_bfloat16* embedding_table,
-    __nv_bfloat16* hidden_state,
-    cudaStream_t stream
-) {
-    token_embedding_kernel<<<token_count, HIDDEN_DIM / 2, 0, stream>>>(
-        token_ids,
-        embedding_table,
-        hidden_state
-    );
-}
+namespace {
 
 __global__
 void rms_norm_kernel(
@@ -70,6 +41,8 @@ void rms_norm_kernel(
         hi_value * rms_vec[0] * static_cast<float>(norm_weights[thread_idx + HIDDEN_DIM / 2])
     );
 }
+
+} // namespace
 
 void launch_rms_norm_kernel(
     std::size_t token_count,

@@ -10,19 +10,21 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 include(cmake/dependencies.cmake)
 
 add_executable(tvllm
-    src/swiglu.cu
-    src/swiglu.h
-    src/rope.cu
-    src/rope.h
-    src/residual_connection.cu
-    src/residual_connection.h
-    src/softmax.cu
-    src/softmax.h
+    src/kernels/attention_softmax.cu
+    src/kernels/attention_softmax.h
+    src/kernels/residual_connection.cu
+    src/kernels/residual_connection.h
+    src/kernels/rms_norm.cu
+    src/kernels/rms_norm.h
+    src/kernels/rope.cu
+    src/kernels/rope.h
+    src/kernels/swiglu.cu
+    src/kernels/swiglu.h
+    src/kernels/token_embedding.cu
+    src/kernels/token_embedding.h
     src/grouped_query_attention.cpp
     src/grouped_query_attention.h
     src/device_arena.hpp
-    src/kernels.cu
-    src/kernels.h
     src/main.cpp
     src/inference.cpp
     src/macro.h

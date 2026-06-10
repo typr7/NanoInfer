@@ -8,8 +8,8 @@
 
 #include "macro.h"
 #include "llama.h"
-#include "kernels.h"
 #include "device_arena.hpp"
+#include "kernels/token_embedding.h"
 
 
 std::vector<std::int32_t> inference(const std::vector<std::int32_t>& input_tokens, const Llama3_2& weights)
