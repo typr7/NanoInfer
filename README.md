@@ -34,3 +34,15 @@ cublasGemmEx(
     algo
 );
 ```
+
+## Softmax
+$$
+p_i=\frac{e^{x_i}}{\sum_{j=0}^{N-1}e^{x_j}}
+$$
+
+原始公式在 FP16/BF16 下容易 overflow，所以用以下等价公式：
+$$
+p_i=\frac{e^{x_i-\max(x)}}{\sum_{j=0}^{N-1}e^{x_j-\max(x)}}
+$$
+
+这是数学上的计算

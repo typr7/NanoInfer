@@ -6,17 +6,21 @@
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
-#include "tensor.h"
+#include "device_arena.hpp"
 
-inline constexpr std::size_t MAX_TOKEN_LEN = 512;
-inline constexpr std::size_t HIDDEN_DIM = 2048;
-inline constexpr std::size_t HEAD_DIM = 64;
+inline constexpr int MAX_TOKEN_LEN = 512;
+inline constexpr int HIDDEN_DIM = 2048;
+inline constexpr int HEAD_DIM = 64;
 
 // GQA
-inline constexpr std::size_t Q_PROJ_DIM = 2048;
-inline constexpr std::size_t K_PROJ_DIM = 512;
-inline constexpr std::size_t Q_HEAD_NUM = Q_PROJ_DIM / HEAD_DIM;
-inline constexpr std::size_t K_HEAD_NUM = K_PROJ_DIM / HEAD_DIM;
+inline constexpr int Q_PROJ_DIM = 2048;
+inline constexpr int K_PROJ_DIM = 512;
+inline constexpr int Q_HEAD_NUM = Q_PROJ_DIM / HEAD_DIM;
+inline constexpr int K_HEAD_NUM = K_PROJ_DIM / HEAD_DIM;
+
+// FFN
+inline constexpr int UP_PROJ_DIM = 8192;
+inline constexpr int DOWN_PROJ_DIM = 2048;
 
 struct Llama3_2
 {
@@ -34,6 +38,7 @@ struct Llama3_2
         // ffn
     std::array<__nv_bfloat16*, 16> gate_proj = {};
     std::array<__nv_bfloat16*, 16> up_proj   = {};
+    std::array<__nv_bfloat16*, 16> gate_up_proj = {};
     std::array<__nv_bfloat16*, 16> down_proj = {};
     
         // RMSNorm
@@ -98,3 +103,13 @@ struct Llama3_2
         }
     }
 };
+
+void run_llama32_layer_prefill(
+    DeviceArena& arena,
+    std::size_t token_num,
+    int layer_idx,
+    const Llama3_2& llama_weight,
+    __nv_bfloat16* hidden_state,
+    cudaStream_t stream,
+    cublasHandle_t handle
+);

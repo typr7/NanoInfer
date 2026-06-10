@@ -10,8 +10,14 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 include(cmake/dependencies.cmake)
 
 add_executable(tvllm
+    src/swiglu.cu
+    src/swiglu.h
+    src/rope.cu
+    src/rope.h
     src/residual_connection.cu
     src/residual_connection.h
+    src/softmax.cu
+    src/softmax.h
     src/grouped_query_attention.cpp
     src/grouped_query_attention.h
     src/device_arena.hpp
@@ -22,7 +28,6 @@ add_executable(tvllm
     src/macro.h
     src/llama.cpp
     src/llama.h
-    src/tensor.h
 )
 
 target_link_libraries(tvllm PRIVATE CUDA::cudart)

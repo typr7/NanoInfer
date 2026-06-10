@@ -24,9 +24,10 @@ void launchTokenEmbeddingKernel(
     std::size_t token_num,
     const std::int32_t* tokens,
     const __nv_bfloat16* embedded_tokens,
-    __nv_bfloat16* output
+    __nv_bfloat16* output,
+    cudaStream_t stream
 ) {
-    tokenEmbeddingKernel<<<token_num, HIDDEN_DIM / 2>>>(tokens, embedded_tokens, output);
+    tokenEmbeddingKernel<<<token_num, HIDDEN_DIM / 2, 0, stream>>>(tokens, embedded_tokens, output);
 }
 
 __global__
@@ -67,29 +68,8 @@ void launchRMSNormKernel(
     float eps,
     const __nv_bfloat16* input,
     const __nv_bfloat16* norm_weight,
-    __nv_bfloat16* output
+    __nv_bfloat16* output,
+    cudaStream_t stream
 ) {
-    RMSNormKernel<<<token_num, HIDDEN_DIM / 2>>>(eps, input, norm_weight, output);
-}
-
-__global__
-void RoPEKernel(std::size_t token_num, int proj_dim, __nv_bfloat16* input)
-{
-    if (blockIdx.x * proj_dim + 2 * threadIdx.x + 1 < token_num * proj_dim) {
-        const int double_i = 2 * (threadIdx.x % (HEAD_DIM / 2));
-        const float theta = blockIdx.x / powf(500000.f, static_cast<float>(double_i) / HEAD_DIM);
-        const float val1 = static_cast<float>(input[blockIdx.x * proj_dim + 2 * threadIdx.x]);
-        const float val2 = static_cast<float>(input[blockIdx.x * proj_dim + 2 * threadIdx.x + 1]);
-        input[blockIdx.x * proj_dim + 2 * threadIdx.x] = cosf(theta) * val1 - sinf(theta) * val2;
-        input[blockIdx.x * proj_dim + 2 * threadIdx.x + 1] = cosf(theta) * val2 + sinf(theta) * val1;
-    }
-}
-
-void launchRoPEKernel(std::size_t token_num, int proj_dim, __nv_bfloat16* input)
-{
-    if (proj_dim / 2 > 1024) {
-        throw std::runtime_error("proj_dim cannot > 2048");
-    }
-    
-    RoPEKernel<<<token_num, HIDDEN_DIM / 2>>>(token_num, proj_dim, input);
+    RMSNormKernel<<<token_num, HIDDEN_DIM / 2, 0, stream>>>(eps, input, norm_weight, output);
 }
