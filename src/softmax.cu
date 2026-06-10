@@ -4,7 +4,7 @@
 
 
 __global__
-void attentionSoftmaxPrefillKernelV1(__nv_bfloat16* input_output)
+void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
 {
     __shared__ float vec[1024];
 
@@ -12,10 +12,10 @@ void attentionSoftmaxPrefillKernelV1(__nv_bfloat16* input_output)
     const int row_dim = blockIdx.x % blockDim.x + 1;
 
     if ((threadIdx.x & 0b01) == 0 && threadIdx.x + 1 < row_dim) {
-        vec[threadIdx.x] = fmaxf(input_output[idx], input_output[idx + 1]);
+        vec[threadIdx.x] = fmaxf(attention_scores[idx], attention_scores[idx + 1]);
     }
     if (threadIdx.x == 0 && (row_dim & 0b01) == 1) {
-        vec[row_dim - 1] = input_output[blockIdx.x * blockDim.x + row_dim - 1];
+        vec[row_dim - 1] = attention_scores[blockIdx.x * blockDim.x + row_dim - 1];
     }
     __syncthreads();
 
@@ -27,10 +27,11 @@ void attentionSoftmaxPrefillKernelV1(__nv_bfloat16* input_output)
         __syncthreads();
     }   
 
-    const float maxx = vec[0];
-    float ex = 0.f;
+    const float row_max = vec[0];
+    float exp_value = 0.f;
     if (threadIdx.x < row_dim) {
-        vec[threadIdx.x] = ex = expf(static_cast<float>(input_output[idx]) - maxx);
+        exp_value = expf(static_cast<float>(attention_scores[idx]) - row_max);
+        vec[threadIdx.x] = exp_value;
     }
     __syncthreads();
 
@@ -44,18 +45,20 @@ void attentionSoftmaxPrefillKernelV1(__nv_bfloat16* input_output)
         __syncthreads();
     }
 
-    __nv_bfloat16 res = 0.f;
+    __nv_bfloat16 softmax_value = 0.f;
     if (threadIdx.x < row_dim) {
-        res = static_cast<__nv_bfloat16>(ex / vec[0]);
+        softmax_value = static_cast<__nv_bfloat16>(exp_value / vec[0]);
     }
-    input_output[idx] = res;
+    attention_scores[idx] = softmax_value;
 }
 
-void launchAttentionSoftmaxPrefillKernel(
-    std::size_t attn_head_num,
-    std::size_t token_num,
-    __nv_bfloat16* input_output,
+void launch_attention_softmax_prefill_kernel(
+    std::size_t head_count,
+    std::size_t token_count,
+    __nv_bfloat16* attention_scores,
     cudaStream_t stream
 ) {
-    attentionSoftmaxPrefillKernelV1<<<attn_head_num * token_num, token_num, 0, stream>>>(input_output);
+    attention_softmax_prefill_kernel_v1<<<head_count * token_count, token_count, 0, stream>>>(
+        attention_scores
+    );
 }

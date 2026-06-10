@@ -4,9 +4,9 @@
 #include <cuda_runtime.h>
 
 
-void launchResidualConnectionKernel(
-    std::size_t token_num,
-    const __nv_bfloat16* __restrict__ input1,
-    __nv_bfloat16* __restrict__ input2_output,
+void launch_residual_connection_kernel(
+    std::size_t token_count,
+    const __nv_bfloat16* __restrict__ residual,
+    __nv_bfloat16* __restrict__ hidden_state,
     cudaStream_t stream
 );

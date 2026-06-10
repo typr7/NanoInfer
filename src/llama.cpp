@@ -12,101 +12,108 @@
 #include "swiglu.h"
 
 
-void run_llama32_layer_prefill(
-    DeviceArena& arena,
-    std::size_t token_num,
+void run_llama_layer_prefill(
+    const Llama3_2& weights,
     int layer_idx,
-    const Llama3_2& llama_weight,
+    std::size_t token_count,
     __nv_bfloat16* hidden_state,
+    DeviceArena& arena,
     cudaStream_t stream,
-    cublasHandle_t handle
+    cublasHandle_t cublas_handle
 ) {
     constexpr float eps  = 0.00001f;
     constexpr float one  = 1.0f;
     constexpr float zero = 0.0f;
 
-    CUBLAS_CHECK(cublasSetStream(handle, stream));
+    CUBLAS_CHECK(cublasSetStream(cublas_handle, stream));
 
     arena.reset();
 
-    auto* x_norm_buffer = arena.alloc<__nv_bfloat16>(token_num * HIDDEN_DIM);
-    auto* qkv_buffer = arena.alloc<__nv_bfloat16>(token_num * (Q_PROJ_DIM + 2 * K_PROJ_DIM));
-    auto* attn_prob_buffer = arena.alloc<__nv_bfloat16>(Q_HEAD_NUM * token_num * token_num);
-    auto* attn_output_buffer = arena.alloc<__nv_bfloat16>(Q_HEAD_NUM * token_num * HEAD_DIM);
+    auto* norm_buffer = arena.alloc<__nv_bfloat16>(token_count * HIDDEN_DIM);
+    auto* qkv_buffer = arena.alloc<__nv_bfloat16>(token_count * (Q_PROJ_DIM + 2 * K_PROJ_DIM));
+    auto* attention_scores = arena.alloc<__nv_bfloat16>(Q_HEAD_NUM * token_count * token_count);
+    auto* attention_output = arena.alloc<__nv_bfloat16>(Q_HEAD_NUM * token_count * HEAD_DIM);
 
     // rmsnorm
-    launchRMSNormKernel(token_num, eps, hidden_state, llama_weight.input_layernorm[layer_idx], x_norm_buffer, stream);
+    launch_rms_norm_kernel(
+        token_count,
+        eps,
+        hidden_state,
+        weights.input_layernorm[layer_idx],
+        norm_buffer,
+        stream
+    );
 
     // qkv proj
-    int m = token_num;
-    int n = Q_PROJ_DIM + 2 * K_PROJ_DIM;
-    int k = HIDDEN_DIM;
+    const int token_rows = static_cast<int>(token_count);
+    const int qkv_stride = Q_PROJ_DIM + 2 * K_PROJ_DIM;
+    const int hidden_stride = HIDDEN_DIM;
     CUBLAS_CHECK(
         cublasGemmEx(
-            handle,
+            cublas_handle,
             CUBLAS_OP_T,
             CUBLAS_OP_N,
-            n, m, k,
+            qkv_stride, token_rows, hidden_stride,
             &one,
-            llama_weight.qkv_proj[layer_idx], CUDA_R_16BF, k,
-            x_norm_buffer, CUDA_R_16BF, k,
+            weights.qkv_proj[layer_idx], CUDA_R_16BF, hidden_stride,
+            norm_buffer, CUDA_R_16BF, hidden_stride,
             &zero,
-            qkv_buffer, CUDA_R_16BF, n,
+            qkv_buffer, CUDA_R_16BF, qkv_stride,
             CUBLAS_COMPUTE_32F,
             CUBLAS_GEMM_DEFAULT
         )
     );
     
-    // qkv: [token_num, q_dim + k_dim + v_dim]
+    // qkv: [token_count, query_dim + key_dim + value_dim]
 
-    __nv_bfloat16* q_begin = qkv_buffer;
-    __nv_bfloat16* k_begin = q_begin + Q_PROJ_DIM;
-    const __nv_bfloat16* v_begin = k_begin + K_PROJ_DIM;
+    __nv_bfloat16* query_begin = qkv_buffer;
+    __nv_bfloat16* key_begin = query_begin + Q_PROJ_DIM;
+    const __nv_bfloat16* value_begin = key_begin + K_PROJ_DIM;
 
-    launchRoPEKernel(token_num, n, n, q_begin, k_begin, stream);
+    launch_rope_kernel(token_count, qkv_stride, qkv_stride, query_begin, key_begin, stream);
 
     const float rsqrt_head_dim = 1.f / std::sqrt(static_cast<float>(HEAD_DIM));
 
     for (int q_head_idx = 0; q_head_idx < Q_HEAD_NUM; q_head_idx++) {
         const int k_head_idx = q_head_idx / (Q_HEAD_NUM / K_HEAD_NUM);
-        const __nv_bfloat16* q = q_begin + q_head_idx * HEAD_DIM;
-        const __nv_bfloat16* k = k_begin + k_head_idx * HEAD_DIM;
-        __nv_bfloat16* prob = attn_prob_buffer + q_head_idx * token_num * token_num;
+        const __nv_bfloat16* query_head = query_begin + q_head_idx * HEAD_DIM;
+        const __nv_bfloat16* key_head = key_begin + k_head_idx * HEAD_DIM;
+        __nv_bfloat16* head_scores = attention_scores + q_head_idx * token_count * token_count;
         CUBLAS_CHECK(
             cublasGemmEx(
-                handle,
+                cublas_handle,
                 CUBLAS_OP_T,
                 CUBLAS_OP_N,
-                token_num, token_num, HEAD_DIM,
+                token_rows, token_rows, HEAD_DIM,
                 &rsqrt_head_dim,
-                k, CUDA_R_16BF, n,
-                q, CUDA_R_16BF, n,
+                key_head, CUDA_R_16BF, qkv_stride,
+                query_head, CUDA_R_16BF, qkv_stride,
                 &zero,
-                prob, CUDA_R_16BF, token_num,
+                head_scores, CUDA_R_16BF, token_rows,
                 CUBLAS_COMPUTE_32F,
                 CUBLAS_GEMM_DEFAULT
             )
         );
     }
 
-    launchAttentionSoftmaxPrefillKernel(Q_HEAD_NUM, token_num, attn_prob_buffer, stream);
+    launch_attention_softmax_prefill_kernel(Q_HEAD_NUM, token_count, attention_scores, stream);
 
     for (int q_head_idx = 0; q_head_idx < Q_HEAD_NUM; q_head_idx++) {
         const int v_head_idx = q_head_idx / (Q_HEAD_NUM / K_HEAD_NUM);
-        const __nv_bfloat16* prob = attn_prob_buffer + q_head_idx * token_num * token_num;
-        const __nv_bfloat16* v = v_begin + v_head_idx * HEAD_DIM;
-        __nv_bfloat16* o = attn_output_buffer + q_head_idx * HEAD_DIM;
+        const __nv_bfloat16* head_scores = attention_scores + q_head_idx * token_count * token_count;
+        const __nv_bfloat16* value_head = value_begin + v_head_idx * HEAD_DIM;
+        __nv_bfloat16* output_head = attention_output + q_head_idx * HEAD_DIM;
         CUBLAS_CHECK(
             cublasGemmEx(
-                handle,
+                cublas_handle,
                 CUBLAS_OP_N,
                 CUBLAS_OP_N,
-                HEAD_DIM, token_num, token_num,
+                HEAD_DIM, token_rows, token_rows,
                 &one,
-                v, CUDA_R_16BF, n,
-                prob, CUDA_R_16BF, token_num,
+                value_head, CUDA_R_16BF, qkv_stride,
+                head_scores, CUDA_R_16BF, token_rows,
                 &zero,
-                o, CUDA_R_16BF, Q_PROJ_DIM,
+                output_head, CUDA_R_16BF, Q_PROJ_DIM,
                 CUBLAS_COMPUTE_32F,
                 CUBLAS_GEMM_DEFAULT
             )
@@ -115,38 +122,45 @@ void run_llama32_layer_prefill(
 
     CUBLAS_CHECK(
         cublasGemmEx(
-            handle,
+            cublas_handle,
             CUBLAS_OP_T,
             CUBLAS_OP_N,
-            HIDDEN_DIM, token_num, Q_PROJ_DIM,
+            HIDDEN_DIM, token_rows, Q_PROJ_DIM,
             &one,
-            llama_weight.o_proj[layer_idx], CUDA_R_16BF, Q_PROJ_DIM,
-            attn_output_buffer, CUDA_R_16BF, Q_PROJ_DIM,
+            weights.o_proj[layer_idx], CUDA_R_16BF, Q_PROJ_DIM,
+            attention_output, CUDA_R_16BF, Q_PROJ_DIM,
             &zero,
-            x_norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
+            norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
             CUBLAS_COMPUTE_32F,
             CUBLAS_GEMM_DEFAULT
         )
     );
 
-    launchResidualConnectionKernel(token_num, x_norm_buffer, hidden_state, stream);
+    launch_residual_connection_kernel(token_count, norm_buffer, hidden_state, stream);
 
     arena.reset();
 
     const int packed_dim = 2 * UP_PROJ_DIM;
-    x_norm_buffer = arena.alloc<__nv_bfloat16>(token_num * HIDDEN_DIM);
-    auto* gate_up_buffer = arena.alloc<__nv_bfloat16>(token_num * packed_dim);
+    norm_buffer = arena.alloc<__nv_bfloat16>(token_count * HIDDEN_DIM);
+    auto* gate_up_buffer = arena.alloc<__nv_bfloat16>(token_count * packed_dim);
 
-    launchRMSNormKernel(token_num, eps, hidden_state, llama_weight.post_attention_layernorm[layer_idx], x_norm_buffer, stream);
+    launch_rms_norm_kernel(
+        token_count,
+        eps,
+        hidden_state,
+        weights.post_attention_layernorm[layer_idx],
+        norm_buffer,
+        stream
+    );
 
     CUBLAS_CHECK(
-        cublasGemmEx(handle,
+        cublasGemmEx(cublas_handle,
             CUBLAS_OP_T,
             CUBLAS_OP_N,
-            packed_dim, token_num, HIDDEN_DIM,
+            packed_dim, token_rows, HIDDEN_DIM,
             &one,
-            llama_weight.gate_up_proj[layer_idx], CUDA_R_16BF, HIDDEN_DIM,
-            x_norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
+            weights.gate_up_proj[layer_idx], CUDA_R_16BF, HIDDEN_DIM,
+            norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
             &zero,
             gate_up_buffer, CUDA_R_16BF, packed_dim,
             CUBLAS_COMPUTE_32F,
@@ -154,25 +168,25 @@ void run_llama32_layer_prefill(
         )
     );
 
-    launchSwiGLUInplaceKernel(token_num, UP_PROJ_DIM, packed_dim, gate_up_buffer, stream);
+    launch_swiglu_inplace_kernel(token_count, UP_PROJ_DIM, packed_dim, gate_up_buffer, stream);
 
     CUBLAS_CHECK(
         cublasGemmEx(
-            handle,
+            cublas_handle,
             CUBLAS_OP_T,
             CUBLAS_OP_N,
-            HIDDEN_DIM, token_num, UP_PROJ_DIM,
+            HIDDEN_DIM, token_rows, UP_PROJ_DIM,
             &one,
-            llama_weight.down_proj[layer_idx], CUDA_R_16BF, UP_PROJ_DIM,
+            weights.down_proj[layer_idx], CUDA_R_16BF, UP_PROJ_DIM,
             gate_up_buffer, CUDA_R_16BF, packed_dim,
             &zero,
-            x_norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
+            norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
             CUBLAS_COMPUTE_32F,
             CUBLAS_GEMM_DEFAULT
         )
     );
 
-    launchResidualConnectionKernel(token_num, x_norm_buffer, hidden_state, stream);
+    launch_residual_connection_kernel(token_count, norm_buffer, hidden_state, stream);
 
     arena.reset();
 }

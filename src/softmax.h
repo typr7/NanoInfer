@@ -4,9 +4,9 @@
 #include <cuda_runtime.h>
 
 
-void launchAttentionSoftmaxPrefillKernel(
-    std::size_t attn_head_num,
-    std::size_t token_num,
-    __nv_bfloat16* input_output,
+void launch_attention_softmax_prefill_kernel(
+    std::size_t head_count,
+    std::size_t token_count,
+    __nv_bfloat16* attention_scores,
     cudaStream_t stream
 );

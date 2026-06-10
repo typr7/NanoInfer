@@ -4,10 +4,10 @@
 #include <cuda_runtime.h>
 
 
-void launchSwiGLUInplaceKernel(
-    std::size_t token_num,
-    int dim,
-    int ld,
+void launch_swiglu_inplace_kernel(
+    std::size_t token_count,
+    int activation_dim,
+    int gate_up_stride,
     __nv_bfloat16* gate_up,
     cudaStream_t stream
 );

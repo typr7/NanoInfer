@@ -2,7 +2,9 @@
 
 
 #include <array>
+#include <utility>
 
+#include <cublas_v2.h>
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
 
@@ -104,12 +106,12 @@ struct Llama3_2
     }
 };
 
-void run_llama32_layer_prefill(
-    DeviceArena& arena,
-    std::size_t token_num,
+void run_llama_layer_prefill(
+    const Llama3_2& weights,
     int layer_idx,
-    const Llama3_2& llama_weight,
+    std::size_t token_count,
     __nv_bfloat16* hidden_state,
+    DeviceArena& arena,
     cudaStream_t stream,
-    cublasHandle_t handle
+    cublasHandle_t cublas_handle
 );

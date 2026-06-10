@@ -6,7 +6,7 @@
 #include <cublas_v2.h>
 
 
-inline const char* cublasStatusToString(cublasStatus_t status)
+inline const char* cublas_status_to_string(cublasStatus_t status)
 {
     switch (status) {
     case CUBLAS_STATUS_SUCCESS:
@@ -48,6 +48,6 @@ inline const char* cublasStatusToString(cublasStatus_t status)
         cublasStatus_t status__ = (call);                                  \
         if (status__ != CUBLAS_STATUS_SUCCESS) {                           \
             throw std::runtime_error(std::string("cuBLAS error: ") +       \
-                                     cublasStatusToString(status__));      \
+                                     cublas_status_to_string(status__));   \
         }                                                                  \
     } while (0)

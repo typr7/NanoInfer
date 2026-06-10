@@ -4,11 +4,11 @@
 #include <cuda_runtime.h>
 
 
-void launchRoPEKernel(
-    std::size_t token_num,
-    int ldq,
-    int ldk,
-    __nv_bfloat16* q,
-    __nv_bfloat16* k,
+void launch_rope_kernel(
+    std::size_t token_count,
+    int query_stride,
+    int key_stride,
+    __nv_bfloat16* query,
+    __nv_bfloat16* key,
     cudaStream_t stream
 );
