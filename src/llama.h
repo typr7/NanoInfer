@@ -31,15 +31,10 @@ struct Llama3_2
     // 16 layers
 
         // self_attn
-    std::array<__nv_bfloat16*, 16> q_proj = {};
-    std::array<__nv_bfloat16*, 16> k_proj = {};
-    std::array<__nv_bfloat16*, 16> v_proj = {};
     std::array<__nv_bfloat16*, 16> qkv_proj = {};
     std::array<__nv_bfloat16*, 16> o_proj = {};
 
         // ffn
-    std::array<__nv_bfloat16*, 16> gate_proj = {};
-    std::array<__nv_bfloat16*, 16> up_proj   = {};
     std::array<__nv_bfloat16*, 16> gate_up_proj = {};
     std::array<__nv_bfloat16*, 16> down_proj = {};
     
@@ -72,14 +67,10 @@ struct Llama3_2
             if (weight) cudaFree(weight);
 
             embed_tokens = other.embed_tokens;
-            q_proj = other.q_proj;
-            k_proj = other.k_proj;
-            v_proj = other.v_proj;
             qkv_proj = other.qkv_proj;
             o_proj = other.o_proj;
 
-            gate_proj = other.gate_proj;
-            up_proj   = other.up_proj;
+            gate_up_proj = other.gate_up_proj;
             down_proj = other.down_proj;
 
             input_layernorm = other.input_layernorm;
