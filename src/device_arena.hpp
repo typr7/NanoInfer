@@ -1,6 +1,8 @@
 #pragma once
 
-#include <memory>
+#include <cstddef>
+#include <new>
+#include <utility>
 
 #include <cuda_runtime.h>
 
@@ -9,9 +11,37 @@
 class DeviceArena
 {
 public:
+    DeviceArena(const DeviceArena&) = delete;
+    DeviceArena& operator=(const DeviceArena&) = delete;
+
     DeviceArena(std::size_t bytes): capacity(bytes)
     {
         CUDA_CHECK(cudaMalloc(&data, bytes));
+    }
+
+    DeviceArena(DeviceArena&& other) noexcept
+    {
+        *this = std::move(other);
+    }
+
+    DeviceArena& operator=(DeviceArena&& other) noexcept
+    {
+        if (this == &other) {
+            return *this;
+        }
+
+        if (data) {
+            cudaFree(data);
+        }
+
+        data = other.data;
+        capacity = other.capacity;
+        offset = other.offset;
+
+        other.data = nullptr;
+        other.capacity = other.offset = 0;
+
+        return *this;
     }
 
     ~DeviceArena()
