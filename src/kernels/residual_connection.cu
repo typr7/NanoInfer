@@ -57,7 +57,6 @@ void residual_connection_kernel_v3(
     const int bf162_per_thread = HALF_HIDDEN_DIM / blockDim.x;
     const std::size_t idx = blockIdx.x * HALF_HIDDEN_DIM + bf162_per_thread * threadIdx.x;
     
-    #pragma unroll
     for (int i = 0; i < bf162_per_thread; i++) {
         hidden_state[idx + i] = __hadd2(residual[idx + i], hidden_state[idx + i]);
     }

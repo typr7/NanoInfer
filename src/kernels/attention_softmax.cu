@@ -21,7 +21,6 @@ void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
     }
     __syncthreads();
 
-    #pragma unroll
     for (int i = 2; i < row_dim; i <<= 1) {
         if ((threadIdx.x & ((i << 1) - 1)) == 0 && threadIdx.x + i < row_dim) {
             vec[threadIdx.x] = fmaxf(vec[threadIdx.x], vec[threadIdx.x + i]);
@@ -37,7 +36,6 @@ void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
     }
     __syncthreads();
 
-    #pragma unroll
     for(int active = row_dim; active > 1; active = (active + 1) >> 1) {
         const int half = active >> 1;
         const int offset = (active + 1) >> 1;
