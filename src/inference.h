@@ -16,13 +16,14 @@ struct InferenceContext
     cublasHandle_t handle = nullptr;
 
     CudaDeviceBuffer token_ids;
+    CudaDeviceBuffer next_token_id;
     CudaDeviceBuffer hidden_state;
     CudaDeviceBuffer kv_cache;
     DeviceArena workspace;
 };
 
-std::vector<std::int32_t> inference(
-    const std::vector<std::int32_t>& input_tokens,
+std::size_t inference(
+    std::vector<std::int32_t>& token_ids,
     const Llama3_2& weights,
     InferenceContext& context
 );
