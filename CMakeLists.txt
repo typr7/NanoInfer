@@ -10,6 +10,10 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 include(cmake/dependencies.cmake)
 
 add_executable(tvllm
+    src/kernels/kv_cache.cu
+    src/kernels/kv_cache.h
+    src/kernels/greedy_decoding.cu
+    src/kernels/greedy_decoding.h
     src/kernels/attention_softmax.cu
     src/kernels/attention_softmax.h
     src/kernels/residual_connection.cu
@@ -22,11 +26,14 @@ add_executable(tvllm
     src/kernels/swiglu.h
     src/kernels/token_embedding.cu
     src/kernels/token_embedding.h
-    src/grouped_query_attention.cpp
-    src/grouped_query_attention.h
+    src/llama_weights.cpp
+    src/llama_weights.h
+    src/cuda_device_buffer.cpp
+    src/cuda_device_buffer.h
     src/device_arena.hpp
     src/main.cpp
     src/inference.cpp
+    src/inference.h
     src/macro.h
     src/llama.cpp
     src/llama.h

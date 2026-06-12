@@ -2,11 +2,8 @@
 
 #include <cstddef>
 #include <new>
-#include <utility>
 
-#include <cuda_runtime.h>
-
-#include "macro.h"
+#include "cuda_device_buffer.h"
 
 class DeviceArena
 {
@@ -16,41 +13,14 @@ public:
 
     DeviceArena(std::size_t bytes): capacity(bytes)
     {
-        CUDA_CHECK(cudaMalloc(&data, bytes));
+        buffer.resize(bytes);
     }
 
-    DeviceArena(DeviceArena&& other) noexcept
-    {
-        *this = std::move(other);
-    }
+    DeviceArena(DeviceArena&& other) noexcept = default;
 
-    DeviceArena& operator=(DeviceArena&& other) noexcept
-    {
-        if (this == &other) {
-            return *this;
-        }
+    DeviceArena& operator=(DeviceArena&& other) noexcept = default;
 
-        if (data) {
-            cudaFree(data);
-        }
-
-        data = other.data;
-        capacity = other.capacity;
-        offset = other.offset;
-
-        other.data = nullptr;
-        other.capacity = other.offset = 0;
-
-        return *this;
-    }
-
-    ~DeviceArena()
-    {
-        if (data) {
-            cudaFree(data);
-            data = nullptr;
-        }
-    }
+    ~DeviceArena() = default;
 
     void reset()
     {
@@ -66,7 +36,7 @@ public:
         }
 
         offset = aligned + bytes;
-        void* ptr = static_cast<std::byte*>(data) + aligned;
+        void* ptr = buffer.data<std::byte>() + aligned;
         return ptr;
     }
 
@@ -77,7 +47,7 @@ public:
     }
 
 private:
-    void* data = nullptr;
+    CudaDeviceBuffer buffer;
     std::size_t capacity = 0;
     std::size_t offset = 0;
 };

@@ -10,9 +10,11 @@
 
 #include "device_arena.hpp"
 
+inline constexpr int VOCAB_LEN     = 128256;
 inline constexpr int MAX_TOKEN_LEN = 512;
-inline constexpr int HIDDEN_DIM = 2048;
-inline constexpr int HEAD_DIM = 64;
+inline constexpr int HIDDEN_DIM    = 2048;
+inline constexpr int HEAD_DIM      = 64;
+inline constexpr int LAYER_NUM     = 16;
 
 // GQA
 inline constexpr int Q_PROJ_DIM = 2048;
@@ -21,8 +23,12 @@ inline constexpr int Q_HEAD_NUM = Q_PROJ_DIM / HEAD_DIM;
 inline constexpr int K_HEAD_NUM = K_PROJ_DIM / HEAD_DIM;
 
 // FFN
-inline constexpr int UP_PROJ_DIM = 8192;
+inline constexpr int UP_PROJ_DIM   = 8192;
 inline constexpr int DOWN_PROJ_DIM = 2048;
+
+inline constexpr float RMS_NORM_EPS     = 1.0e-5f;
+inline constexpr float CUBLAS_ALPHA_ONE = 1.f;
+inline constexpr float CUBLAS_BETA_ZERO = 0.f;
 
 struct Llama3_2
 {
@@ -97,12 +103,11 @@ struct Llama3_2
     }
 };
 
+struct InferenceContext;
+
 void run_llama_layer_prefill(
     const Llama3_2& weights,
     int layer_idx,
     std::size_t token_count,
-    __nv_bfloat16* hidden_state,
-    DeviceArena& arena,
-    cudaStream_t stream,
-    cublasHandle_t cublas_handle
+    InferenceContext& context
 );
