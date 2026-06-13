@@ -43,6 +43,15 @@ void copy_host_to_device_async(
     CUDA_CHECK(cudaMemcpyAsync(dst, src, byte_size, cudaMemcpyHostToDevice, stream));
 }
 
+void copy_device_to_host_async(
+    void* dst,
+    const void* src,
+    std::size_t byte_size,
+    cudaStream_t stream
+) {
+    CUDA_CHECK(cudaMemcpyAsync(dst, src, byte_size, cudaMemcpyDeviceToHost, stream));
+}
+
 } // namespace
 
 CudaDeviceBuffer::CudaDeviceBuffer()
@@ -135,6 +144,17 @@ std::size_t CudaDeviceBuffer::download(void* dst, std::size_t byte_size) const
 
     const std::size_t download_size = std::min(byte_size, this->byte_size);
     copy_device_to_host(dst, device_data, download_size);
+    return download_size;
+}
+
+std::size_t CudaDeviceBuffer::download_async(void* dst, std::size_t byte_size, cudaStream_t stream) const
+{
+    assert(device_data != nullptr);
+    assert(dst != nullptr);
+    assert(byte_size != 0);
+
+    const std::size_t download_size = std::min(byte_size, this->byte_size);
+    copy_device_to_host_async(dst, device_data, download_size, stream);
     return download_size;
 }
 

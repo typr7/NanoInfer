@@ -37,6 +37,7 @@ public:
     void upload(const void* src, std::size_t byte_size);
     void upload_async(const void* src, std::size_t byte_size, cudaStream_t stream);
     std::size_t download(void* dst, std::size_t byte_size) const;
+    std::size_t download_async(void* dst, std::size_t byte_size, cudaStream_t stream) const;
     void destroy();
 
 private:
