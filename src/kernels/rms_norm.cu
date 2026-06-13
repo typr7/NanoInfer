@@ -5,57 +5,53 @@
 
 namespace {
 
-__global__
+template <int BLOCK_SIZE> __global__
 void rms_norm_kernel(
-    float eps,
-    const __nv_bfloat16* hidden_state,
+    const __nv_bfloat16* __restrict__ hidden_state,
     const __nv_bfloat16* __restrict__ norm_weights,
-    __nv_bfloat16* normalized_state
+    __nv_bfloat16* __restrict__ normalized_state
 ) {
-    __shared__ float rms_vec[HIDDEN_DIM / 2];
+    __shared__ float rms_vec[BLOCK_SIZE];
 
-    const int thread_idx = threadIdx.x;
-    const int idx = blockIdx.x * HIDDEN_DIM + thread_idx;
-    const float lo_value = static_cast<float>(hidden_state[idx]);
-    const float hi_value = static_cast<float>(hidden_state[idx + HIDDEN_DIM / 2]);
-    rms_vec[thread_idx] = lo_value * lo_value + hi_value * hi_value;
+    const int tid = threadIdx.x;
+    const int bid = blockIdx.x;
+
+    float block_sum = 0.f;
+    for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
+        const int idx = bid * HIDDEN_DIM + i;
+        const float val = static_cast<float>(hidden_state[idx]);
+        block_sum += val * val;
+    }
+    rms_vec[tid] = block_sum;
     __syncthreads();
 
-    #pragma unroll
-    for (int offset = HIDDEN_DIM / 4; offset > 0; offset >>= 1) {
-        if (thread_idx < offset) {
-            rms_vec[thread_idx] += rms_vec[thread_idx + offset];
+    for (int offset = (BLOCK_SIZE >> 1); offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            rms_vec[tid] += rms_vec[tid + offset];
         }
         __syncthreads();
     }
+    const float rms_rfactor = rsqrtf(rms_vec[0] / HIDDEN_DIM + RMS_NORM_EPS);
 
-    if (thread_idx == 0) {
-        rms_vec[0] = rsqrtf(rms_vec[0] / HIDDEN_DIM + eps);
+    for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
+        const int idx = bid * HIDDEN_DIM + i;
+        const float val = static_cast<float>(hidden_state[idx]);
+        const float norm_factor = static_cast<float>(norm_weights[i]);
+        const float normed_val = norm_factor * rms_rfactor * val;
+        normalized_state[idx] = static_cast<__nv_bfloat16>(normed_val);
     }
-    __syncthreads();
-
-    normalized_state[idx] = static_cast<__nv_bfloat16>(
-        lo_value * rms_vec[0] * static_cast<float>(norm_weights[thread_idx])
-    );
-    normalized_state[idx + HIDDEN_DIM / 2] = static_cast<__nv_bfloat16>(
-        hi_value * rms_vec[0] * static_cast<float>(norm_weights[thread_idx + HIDDEN_DIM / 2])
-    );
 }
 
 } // namespace
 
 void launch_rms_norm_kernel(
     std::size_t token_count,
-    float eps,
     const __nv_bfloat16* hidden_state,
     const __nv_bfloat16* norm_weights,
     __nv_bfloat16* normalized_state,
     cudaStream_t stream
 ) {
-    rms_norm_kernel<<<token_count, HIDDEN_DIM / 2, 0, stream>>>(
-        eps,
-        hidden_state,
-        norm_weights,
-        normalized_state
-    );
+    constexpr int BLOCK_SIZE = 256;
+    rms_norm_kernel<BLOCK_SIZE>
+        <<<token_count, BLOCK_SIZE, 0, stream>>>(hidden_state, norm_weights, normalized_state);
 }
