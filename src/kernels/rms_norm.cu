@@ -17,6 +17,7 @@ void rms_norm_kernel(
     const int bid = blockIdx.x;
 
     float block_sum = 0.f;
+    #pragma unroll
     for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
         const int idx = bid * HIDDEN_DIM + i;
         const float val = static_cast<float>(hidden_state[idx]);
@@ -25,6 +26,7 @@ void rms_norm_kernel(
     rms_vec[tid] = block_sum;
     __syncthreads();
 
+    #pragma unroll
     for (int offset = (BLOCK_SIZE >> 1); offset > 0; offset >>= 1) {
         if (tid < offset) {
             rms_vec[tid] += rms_vec[tid + offset];
@@ -33,6 +35,7 @@ void rms_norm_kernel(
     }
     const float rms_rfactor = rsqrtf(rms_vec[0] / HIDDEN_DIM + RMS_NORM_EPS);
 
+    #pragma unroll
     for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
         const int idx = bid * HIDDEN_DIM + i;
         const float val = static_cast<float>(hidden_state[idx]);
