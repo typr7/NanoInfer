@@ -1,11 +1,13 @@
+#include <math_constants.h>
 #include <cuda_bf16.h>
 
 #include "attention_softmax.h"
+#include "../llama.h"
 
 
 namespace {
 
-__global__
+[[maybe_unused]] __global__
 void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
 {
     __shared__ float vec[1024];
@@ -52,6 +54,66 @@ void attention_softmax_prefill_kernel_v1(__nv_bfloat16* attention_scores)
     attention_scores[idx] = softmax_value;
 }
 
+template <int block_size> __global__
+void attention_softmax_prefill_kernel_v2(std::size_t token_count, __nv_bfloat16* attn_scores)
+{
+    __shared__ float prob_vec[MAX_TOKEN_LEN];
+    __shared__ float reduce_vec[block_size];
+
+    const int tid = threadIdx.x;
+    const int head_idx = blockIdx.x;
+    const int row_idx = blockIdx.y;
+
+    __nv_bfloat16* vec_begin = attn_scores
+                             + head_idx * token_count * token_count
+                             + row_idx * token_count;
+
+    // max reduction
+    float local_max = -CUDART_INF_F;
+    for (int i = tid; i < row_idx + 1; i += block_size) {
+        local_max = fmaxf(local_max, static_cast<float>(vec_begin[i]));
+    }
+    reduce_vec[tid] = local_max;
+    __syncthreads();
+
+    #pragma unroll
+    for (int offset = (block_size >> 1); offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            reduce_vec[tid] = fmaxf(reduce_vec[tid], reduce_vec[tid + offset]);
+        }
+        __syncthreads();
+    }
+    const float global_max = reduce_vec[0];
+
+    for (int i = tid; i < row_idx + 1; i += block_size) {
+        prob_vec[i] = expf(static_cast<float>(vec_begin[i]) - global_max);
+    }
+
+    // sum reduction
+    float local_sum = 0.f;
+    for (int i = tid; i < row_idx + 1; i += block_size) {
+        local_sum += prob_vec[i];
+    }
+    reduce_vec[tid] = local_sum;
+    __syncthreads();
+
+    #pragma unroll
+    for (int offset = (block_size >> 1); offset > 0; offset >>= 1) {
+        if (tid < offset) {
+            reduce_vec[tid] += reduce_vec[tid + offset];
+        }
+        __syncthreads();
+    }
+    const float global_sum = reduce_vec[0];
+
+    for (int i = tid; i < token_count; i += block_size) {
+        vec_begin[i] = __nv_bfloat16(0.f);
+        if (i < row_idx + 1) {
+            vec_begin[i] = static_cast<__nv_bfloat16>(prob_vec[i] / global_sum);
+        }
+    }
+}
+
 } // namespace
 
 void launch_attention_softmax_prefill_kernel(
@@ -60,7 +122,8 @@ void launch_attention_softmax_prefill_kernel(
     __nv_bfloat16* attention_scores,
     cudaStream_t stream
 ) {
-    attention_softmax_prefill_kernel_v1<<<head_count * token_count, token_count, 0, stream>>>(
-        attention_scores
-    );
+    constexpr int block_size = 256;
+
+    attention_softmax_prefill_kernel_v2<block_size>
+        <<<dim3(head_count, token_count), block_size, 0, stream>>>(token_count, attention_scores);
 }
