@@ -49,7 +49,7 @@ void residual_connection_kernel_v2(
 }
 
 // v3: single thread processes more data
-template <int BLOCK_SIZE>
+template <int block_size>
 __global__
 void residual_connection_kernel_v3(
     const __nv_bfloat162* __restrict__ residual,
@@ -58,7 +58,7 @@ void residual_connection_kernel_v3(
     const int tid = threadIdx.x;
     const int bid = blockIdx.x;
 
-    const int bf162_per_thread = HALF_HIDDEN_DIM / BLOCK_SIZE;
+    const int bf162_per_thread = HALF_HIDDEN_DIM / block_size;
     const std::size_t idx = bid * HALF_HIDDEN_DIM + bf162_per_thread * tid;
     
     #pragma unroll
@@ -73,10 +73,10 @@ void launch_residual_connection_kernel_v3(
     __nv_bfloat16* hidden_state,
     cudaStream_t stream
 ) {
-    constexpr int BLOCK_SIZE = 256;
+    constexpr int block_size = 256;
 
-    residual_connection_kernel_v3<BLOCK_SIZE>
-        <<<token_count, BLOCK_SIZE, 0, stream>>>(
+    residual_connection_kernel_v3<block_size>
+        <<<token_count, block_size, 0, stream>>>(
         reinterpret_cast<const __nv_bfloat162*>(residual),
         reinterpret_cast<__nv_bfloat162*>(hidden_state)
     );

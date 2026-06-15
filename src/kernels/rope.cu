@@ -59,7 +59,7 @@ void ensure_rope_freqs_initialized()
     initialized = true;
 }
 
-template <int BLOCK_SIZE> __global__
+template <int block_size> __global__
 void rope_llama3_half_split_inplace_kernel(
     int position_offset,
     int qk_stride,
@@ -73,7 +73,7 @@ void rope_llama3_half_split_inplace_kernel(
     __nv_bfloat16* k_begin = q_begin + Q_PROJ_DIM;
 
     #pragma unroll
-    for (int i = tid; i < (Q_PROJ_DIM >> 1); i += BLOCK_SIZE) {
+    for (int i = tid; i < (Q_PROJ_DIM >> 1); i += block_size) {
         const int pair_idx = i % half_head_dim;
         const float freq = d_rope_freqs[pair_idx];
         const float sin_theta = sinf(position * freq);
@@ -87,7 +87,7 @@ void rope_llama3_half_split_inplace_kernel(
     }
 
     #pragma unroll
-    for (int i = tid; i < (K_PROJ_DIM >> 1); i += BLOCK_SIZE) {
+    for (int i = tid; i < (K_PROJ_DIM >> 1); i += block_size) {
         const int pair_idx = i % half_head_dim;
         const float freq = d_rope_freqs[pair_idx];
         const float sin_theta = sinf(position * freq);
@@ -112,7 +112,7 @@ void launch_rope_llama3_half_split_inplace_kernel(
 ) {
     ensure_rope_freqs_initialized();
 
-    constexpr int BLOCK_SIZE = 256;
-    rope_llama3_half_split_inplace_kernel<BLOCK_SIZE>
-        <<<token_count, BLOCK_SIZE, 0, stream>>>(position_offset, qk_stride, qk);
+    constexpr int block_size = 256;
+    rope_llama3_half_split_inplace_kernel<block_size>
+        <<<token_count, block_size, 0, stream>>>(position_offset, qk_stride, qk);
 }

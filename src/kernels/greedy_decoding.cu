@@ -20,21 +20,21 @@ bool better(Pair p1, Pair p2)
 }
 
 
-template<int BLOCK_SIZE> __global__
+template<int block_size> __global__
 void single_batch_greedy_decode_kernel(
     const __nv_bfloat16* __restrict__ logits,
     const __nv_bfloat16* __restrict__ embedding_table,
     __nv_bfloat16* __restrict__ next_token_embedding,
     int32_t* __restrict__ next_token_id
 ) {
-    __shared__ float val[BLOCK_SIZE];
-    __shared__ int idx[BLOCK_SIZE];
+    __shared__ float val[block_size];
+    __shared__ int idx[block_size];
 
     const int tid = threadIdx.x;
 
     Pair best{ -CUDART_INF_F, -1 };
 
-    for (int i = tid; i < VOCAB_LEN; i += BLOCK_SIZE) {
+    for (int i = tid; i < VOCAB_LEN; i += block_size) {
         auto cand = Pair{ static_cast<float>(logits[i]), i };
         if (better(cand, best)) {
             best = cand;
@@ -50,7 +50,7 @@ void single_batch_greedy_decode_kernel(
         best.val = val[0];
         best.idx = idx[0];
 
-        for (int i = 1; i < BLOCK_SIZE; i++) {
+        for (int i = 1; i < block_size; i++) {
             auto cand = Pair{ val[i], idx[i] };
             if (better(cand, best)) {
                 best = cand;
@@ -65,7 +65,7 @@ void single_batch_greedy_decode_kernel(
 
     const __nv_bfloat16* embedding = embedding_table + idx[0] * HIDDEN_DIM;
     #pragma unroll
-    for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
+    for (int i = tid; i < HIDDEN_DIM; i += block_size) {
         next_token_embedding[i] = embedding[i];
     }
 }
@@ -79,7 +79,8 @@ void launch_single_batch_greedy_decode_kernel(
     int32_t* next_token_id,
     cudaStream_t stream
 ) {
-    constexpr int BLOCK_SIZE = 256;
-    single_batch_greedy_decode_kernel<BLOCK_SIZE>
-        <<<1, BLOCK_SIZE, 0, stream>>>(logits, embedding_table, next_token_embedding, next_token_id);
+    constexpr int block_size = 256;
+
+    single_batch_greedy_decode_kernel<block_size>
+        <<<1, block_size, 0, stream>>>(logits, embedding_table, next_token_embedding, next_token_id);
 }

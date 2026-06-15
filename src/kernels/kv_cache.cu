@@ -6,7 +6,7 @@
 namespace
 {
 
-template <int BLOCK_SIZE> __global__
+template <int block_size> __global__
 void single_batch_store_kv_cache_kernel(
     int layer_idx,
     int line_offset,
@@ -24,7 +24,7 @@ void single_batch_store_kv_cache_kernel(
                         + (line_offset + blockIdx.x) * cache_stride;
 
     #pragma unroll
-    for (int i = tid; i < cache_stride; i += BLOCK_SIZE) {
+    for (int i = tid; i < cache_stride; i += block_size) {
         dst[i] = src[i];
     }
 }
@@ -40,7 +40,7 @@ void launch_single_batch_store_kv_cache_kernel(
     __nv_bfloat16* kv_cache,
     cudaStream_t stream
 ) {
-    constexpr int BLOCK_SIZE = 256;
-    single_batch_store_kv_cache_kernel<BLOCK_SIZE>
-        <<<lines_to_store, BLOCK_SIZE, 0, stream>>>(layer_idx, line_offset, kv_stride, kv, kv_cache);
+    constexpr int block_size = 256;
+    single_batch_store_kv_cache_kernel<block_size>
+        <<<lines_to_store, block_size, 0, stream>>>(layer_idx, line_offset, kv_stride, kv, kv_cache);
 }

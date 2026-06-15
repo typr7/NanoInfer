@@ -5,7 +5,7 @@
 
 namespace {
 
-template <int BLOCK_SIZE> __global__
+template <int block_size> __global__
 void token_embedding_kernel(
     const std::int32_t* __restrict__ token_ids,
     const __nv_bfloat16* __restrict__ embedding_table,
@@ -16,7 +16,7 @@ void token_embedding_kernel(
     const std::int32_t token_id = token_ids[bid];
 
     #pragma unroll
-    for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
+    for (int i = tid; i < HIDDEN_DIM; i += block_size) {
         const int src_idx = token_id * HIDDEN_DIM + i;
         const int dst_idx = bid * HIDDEN_DIM + i;
         hidden_state[dst_idx] = embedding_table[src_idx];
@@ -32,10 +32,10 @@ void launch_token_embedding_kernel(
     __nv_bfloat16* hidden_state,
     cudaStream_t stream
 ) {
-    constexpr int BLOCK_SIZE = 256;
+    constexpr int block_size = 256;
 
-    token_embedding_kernel<BLOCK_SIZE>
-        <<<token_count, BLOCK_SIZE, 0, stream>>>(
+    token_embedding_kernel<block_size>
+        <<<token_count, block_size, 0, stream>>>(
         token_ids,
         embedding_table,
         hidden_state
