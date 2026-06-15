@@ -6,7 +6,7 @@
 #include <cuda_bf16.h>
 
 
-void launch_single_batch_greedy_decode_prefill_kernel(
+void launch_single_batch_greedy_decode_kernel(
     const __nv_bfloat16* logits,
     const __nv_bfloat16* embedding_table,
     __nv_bfloat16* next_token_embedding,

@@ -26,10 +26,13 @@ std::int32_t run_prefill_stage(
     const std::size_t token_count = input_token_ids.size();
 
     cudaStream_t stream = context.stream;
+    cublasHandle_t handle = context.handle;
     CudaDeviceBuffer& token_ids = context.token_ids;
     CudaDeviceBuffer& next_token_id = context.next_token_id;
     auto* hidden_state = context.hidden_state.data<__nv_bfloat16>();
     DeviceArena& workspace = context.workspace;
+
+    CUBLAS_CHECK(cublasSetStream(handle, stream));
 
     workspace.reset();
 
@@ -43,15 +46,16 @@ std::int32_t run_prefill_stage(
     );
 
     for (int layer_idx = 0; layer_idx < LAYER_NUM; layer_idx++) {
-        run_llama_layer_prefill(weights, layer_idx, token_count, context);
+        run_llama_layer_prefill(layer_idx, token_count, weights, context);
     }
+
+    workspace.reset();
 
     auto* norm_buffer  = workspace.alloc<__nv_bfloat16>(token_count * HIDDEN_DIM);
     auto* vocab_logits = workspace.alloc<__nv_bfloat16>(VOCAB_LEN);
 
     launch_rms_norm_kernel(
         token_count,
-        RMS_NORM_EPS,
         hidden_state,
         weights.norm,
         norm_buffer,
@@ -60,7 +64,7 @@ std::int32_t run_prefill_stage(
 
     CUBLAS_CHECK(
         cublasGemmEx(
-            context.handle,
+            handle,
             CUBLAS_OP_T,
             CUBLAS_OP_N,
             VOCAB_LEN, 1 /* for single batch */, HIDDEN_DIM,
@@ -74,7 +78,7 @@ std::int32_t run_prefill_stage(
         )
     );
 
-    launch_single_batch_greedy_decode_prefill_kernel(
+    launch_single_batch_greedy_decode_kernel(
         vocab_logits,
         weights.embed_tokens,
         hidden_state,
@@ -85,15 +89,69 @@ std::int32_t run_prefill_stage(
     workspace.reset();
 
     std::int32_t token_id;
-    // TODO: 同步问题
-    next_token_id.download(&token_id, sizeof(std::int32_t));
+    next_token_id.download_async(&token_id, sizeof(std::int32_t), stream);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
 
     return token_id;
 }
 
-std::int32_t run_decode_step(const Llama3_2& weights, InferenceContext& context)
-{
-    return -1;
+std::int32_t run_decode_step(
+    std::size_t token_count,
+    const Llama3_2& weights,
+    InferenceContext& context
+) {
+    cudaStream_t stream = context.stream;
+    cublasHandle_t handle = context.handle;
+    DeviceArena& workspace = context.workspace;
+    CudaDeviceBuffer& next_token_id = context.next_token_id;
+    auto* hidden_state = context.hidden_state.data<__nv_bfloat16>();
+
+    CUBLAS_CHECK(cublasSetStream(handle, stream));
+
+    workspace.reset();
+
+    for (int layer_idx = 0; layer_idx < LAYER_NUM; layer_idx++) {
+        run_llama_layer_decode(layer_idx, token_count, weights, context);
+    }
+
+    workspace.reset();
+
+    auto* norm_buffer = workspace.alloc<__nv_bfloat16>(HIDDEN_DIM);
+    auto* vocab_logits = workspace.alloc<__nv_bfloat16>(VOCAB_LEN);
+
+    launch_rms_norm_kernel(1, hidden_state, weights.norm, norm_buffer, stream);
+
+    CUBLAS_CHECK(
+        cublasGemmEx(
+            handle,
+            CUBLAS_OP_T,
+            CUBLAS_OP_N,
+            VOCAB_LEN, 1, HIDDEN_DIM,
+            &CUBLAS_ALPHA_ONE,
+            weights.embed_tokens, CUDA_R_16BF, HIDDEN_DIM,
+            norm_buffer, CUDA_R_16BF, HIDDEN_DIM,
+            &CUBLAS_BETA_ZERO,
+            vocab_logits, CUDA_R_16BF, VOCAB_LEN,
+            CUBLAS_COMPUTE_32F,
+            CUBLAS_GEMM_DEFAULT
+        )
+    );
+
+    launch_single_batch_greedy_decode_kernel(
+        vocab_logits,
+        weights.embed_tokens,
+        hidden_state,
+        next_token_id.data<std::int32_t>(),
+        stream
+    );
+
+    workspace.reset();
+
+    std::int32_t token_id;
+    next_token_id.download_async(&token_id, sizeof(std::int32_t), stream);
+    CUDA_CHECK(cudaStreamSynchronize(stream));
+
+    return token_id;
 }
 
 bool is_eot(std::int32_t token_id)
@@ -113,18 +171,15 @@ std::size_t inference(
         return 0;
     }
 
-    // TODO: already generate token
     std::int32_t token_id = run_prefill_stage(token_ids, weights, context);
     if (is_eot(token_id)) {
         return 0;
     }
-
     token_ids.push_back(token_id);
 
-    // TODO: decode stage
     std::size_t token_count = input_token_count + 1;
     for (; token_count < MAX_TOKEN_LEN; token_count++) {
-        token_id = run_decode_step(weights, context); // dummy
+        token_id = run_decode_step(token_count, weights, context);
         if (is_eot(token_id)) {
             break;
         }

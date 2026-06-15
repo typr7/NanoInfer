@@ -30,6 +30,13 @@ inline constexpr float RMS_NORM_EPS     = 1.0e-5f;
 inline constexpr float CUBLAS_ALPHA_ONE = 1.f;
 inline constexpr float CUBLAS_BETA_ZERO = 0.f;
 
+// RoPE
+inline constexpr float ROPE_THETA = 500000.f;
+inline constexpr float ROPE_SCALING_FACTOR = 32.f;
+inline constexpr float ROPE_SCALING_HIGH_FREQ_FACTOR = 4.f;
+inline constexpr float ROPE_SCALING_LOW_FREQ_FACTOR = 1.f;
+inline constexpr float ROPE_SCALING_ORIGINAL_MAX_POSITION_EMBEDDINGS = 8192.f;
+
 struct Llama3_2
 {
     __nv_bfloat16* embed_tokens = nullptr;
@@ -106,8 +113,15 @@ struct Llama3_2
 struct InferenceContext;
 
 void run_llama_layer_prefill(
-    const Llama3_2& weights,
     int layer_idx,
     std::size_t token_count,
+    const Llama3_2& weights,
+    InferenceContext& context
+);
+
+void run_llama_layer_decode(
+    int layer_idx,
+    std::size_t token_count,
+    const Llama3_2& weights,
     InferenceContext& context
 );

@@ -21,7 +21,7 @@ bool better(Pair p1, Pair p2)
 
 
 template<int BLOCK_SIZE> __global__
-void single_batch_greedy_decode_prefill_kernel(
+void single_batch_greedy_decode_kernel(
     const __nv_bfloat16* __restrict__ logits,
     const __nv_bfloat16* __restrict__ embedding_table,
     __nv_bfloat16* __restrict__ next_token_embedding,
@@ -64,6 +64,7 @@ void single_batch_greedy_decode_prefill_kernel(
     __syncthreads();
 
     const __nv_bfloat16* embedding = embedding_table + idx[0] * HIDDEN_DIM;
+    #pragma unroll
     for (int i = tid; i < HIDDEN_DIM; i += BLOCK_SIZE) {
         next_token_embedding[i] = embedding[i];
     }
@@ -71,7 +72,7 @@ void single_batch_greedy_decode_prefill_kernel(
 
 }
 
-void launch_single_batch_greedy_decode_prefill_kernel(
+void launch_single_batch_greedy_decode_kernel(
     const __nv_bfloat16* logits,
     const __nv_bfloat16* embedding_table,
     __nv_bfloat16* next_token_embedding,
@@ -79,6 +80,6 @@ void launch_single_batch_greedy_decode_prefill_kernel(
     cudaStream_t stream
 ) {
     constexpr int BLOCK_SIZE = 256;
-    single_batch_greedy_decode_prefill_kernel<BLOCK_SIZE>
+    single_batch_greedy_decode_kernel<BLOCK_SIZE>
         <<<1, BLOCK_SIZE, 0, stream>>>(logits, embedding_table, next_token_embedding, next_token_id);
 }

@@ -1,3 +1,5 @@
+#include <cassert>
+
 #include "rope.h"
 #include "../llama.h"
 #include "../macro.h"
@@ -8,35 +10,38 @@
 namespace {
 
 constexpr int ROPE_PAIR_COUNT = HEAD_DIM / 2;
+static_assert((HEAD_DIM & 0b01) == 0);
+static_assert((Q_PROJ_DIM % HEAD_DIM) == 0);
+static_assert((K_PROJ_DIM % HEAD_DIM) == 0);
 
 __device__ __constant__ float d_rope_freqs[ROPE_PAIR_COUNT];
 
 float llama3_inv_freq(int pair_idx)
 {
-    constexpr float rope_theta = 500000.f;
-    constexpr float rope_factor = 32.f;
-    constexpr float low_freq_factor = 1.f;
-    constexpr float high_freq_factor = 4.f;
-    constexpr float original_max_position = 8192.f;
+    constexpr float rope_theta = ROPE_THETA;
+    constexpr float rope_factor = ROPE_SCALING_FACTOR;
+    constexpr float low_freq_factor = ROPE_SCALING_LOW_FREQ_FACTOR;
+    constexpr float high_freq_factor = ROPE_SCALING_HIGH_FREQ_FACTOR;
+    constexpr float original_max_position = ROPE_SCALING_ORIGINAL_MAX_POSITION_EMBEDDINGS;
 
-    const float inv_freq = 1.f / powf(
+    const float freq = powf(
         rope_theta,
         static_cast<float>(2 * pair_idx) / static_cast<float>(HEAD_DIM)
     );
-    const float wavelen = 2.f * CUDART_PI_F / inv_freq;
+    const float wavelen = 2.f * CUDART_PI_F * freq;
     const float low_freq_wavelen = original_max_position / low_freq_factor;
     const float high_freq_wavelen = original_max_position / high_freq_factor;
 
+    float inv_freq = 1.f / freq;
     if (wavelen > low_freq_wavelen) {
-        return inv_freq / rope_factor;
-    }
-    if (wavelen < high_freq_wavelen) {
-        return inv_freq;
+        inv_freq /= rope_factor;
+    } else if (wavelen >= high_freq_wavelen) {
+        const float smooth = (original_max_position / wavelen - low_freq_factor) /
+                             (high_freq_factor - low_freq_factor);
+        inv_freq = (1.f - smooth) * inv_freq / rope_factor + smooth * inv_freq;
     }
 
-    const float smooth = (original_max_position / wavelen - low_freq_factor) /
-                         (high_freq_factor - low_freq_factor);
-    return (1.f - smooth) * inv_freq / rope_factor + smooth * inv_freq;
+    return inv_freq;
 }
 
 void ensure_rope_freqs_initialized()
@@ -54,49 +59,60 @@ void ensure_rope_freqs_initialized()
     initialized = true;
 }
 
-__global__
-void rope_kernel(
-    int query_stride,
-    int key_stride,
-    __nv_bfloat16* __restrict__ query,
-    __nv_bfloat16* __restrict__ key
+template <int BLOCK_SIZE> __global__
+void rope_llama3_half_split_inplace_kernel(
+    int position_offset,
+    int qk_stride,
+    __nv_bfloat16* qk
 ) {
-    const int query_idx = blockIdx.x * query_stride + 2 * threadIdx.x;
-    const int pair_idx = threadIdx.x % ROPE_PAIR_COUNT;
-    const float theta = static_cast<float>(blockIdx.x) * d_rope_freqs[pair_idx];
-    const float cos_theta = cosf(theta);
-    const float sin_theta = sinf(theta);
-    if (2 * threadIdx.x < Q_PROJ_DIM) {
-        const float even_value = query[query_idx];
-        const float odd_value = query[query_idx + 1];
-        query[query_idx] = even_value * cos_theta - odd_value * sin_theta;
-        query[query_idx + 1] = even_value * sin_theta + odd_value * cos_theta;
+    const int tid = threadIdx.x;
+    const int bid = blockIdx.x;
+    const int position = position_offset + bid;
+    const int half_head_dim = (HEAD_DIM >> 1);
+    __nv_bfloat16* q_begin = qk + bid * qk_stride;
+    __nv_bfloat16* k_begin = q_begin + Q_PROJ_DIM;
+
+    #pragma unroll
+    for (int i = tid; i < (Q_PROJ_DIM >> 1); i += BLOCK_SIZE) {
+        const int pair_idx = i % half_head_dim;
+        const float freq = d_rope_freqs[pair_idx];
+        const float sin_theta = sinf(position * freq);
+        const float cos_theta = cosf(position * freq);
+
+        const int idx = 2 * i - pair_idx;
+        const float val1 = static_cast<float>(q_begin[idx]);
+        const float val2 = static_cast<float>(q_begin[idx + half_head_dim]);
+        q_begin[idx] = static_cast<__nv_bfloat16>(val1 * cos_theta - val2 * sin_theta);
+        q_begin[idx + half_head_dim] = static_cast<__nv_bfloat16>(val1 * sin_theta + val2 * cos_theta);
     }
-    const int key_idx = blockIdx.x * key_stride + 2 * threadIdx.x;
-    if (2 * threadIdx.x < K_PROJ_DIM) {
-        const float even_value = key[key_idx];
-        const float odd_value = key[key_idx + 1];
-        key[key_idx] = even_value * cos_theta - odd_value * sin_theta;
-        key[key_idx + 1] = even_value * sin_theta + odd_value * cos_theta;
+
+    #pragma unroll
+    for (int i = tid; i < (K_PROJ_DIM >> 1); i += BLOCK_SIZE) {
+        const int pair_idx = i % half_head_dim;
+        const float freq = d_rope_freqs[pair_idx];
+        const float sin_theta = sinf(position * freq);
+        const float cos_theta = cosf(position * freq);
+
+        const int idx = 2 * i - pair_idx;
+        const float val1 = static_cast<float>(k_begin[idx]);
+        const float val2 = static_cast<float>(k_begin[idx + half_head_dim]);
+        k_begin[idx] = static_cast<__nv_bfloat16>(val1 * cos_theta - val2 * sin_theta);
+        k_begin[idx + half_head_dim] = static_cast<__nv_bfloat16>(val1 * sin_theta + val2 * cos_theta);
     }
 }
 
 } // namespace
 
-void launch_rope_kernel(
+void launch_rope_llama3_half_split_inplace_kernel(
     std::size_t token_count,
-    int query_stride,
-    int key_stride,
-    __nv_bfloat16* query,
-    __nv_bfloat16* key,
+    int position_offset,
+    int qk_stride,
+    __nv_bfloat16* qk,
     cudaStream_t stream
 ) {
     ensure_rope_freqs_initialized();
 
-    rope_kernel<<<token_count, HIDDEN_DIM / 2, 0, stream>>>(
-        query_stride,
-        key_stride,
-        query,
-        key
-    );
+    constexpr int BLOCK_SIZE = 256;
+    rope_llama3_half_split_inplace_kernel<BLOCK_SIZE>
+        <<<token_count, BLOCK_SIZE, 0, stream>>>(position_offset, qk_stride, qk);
 }
