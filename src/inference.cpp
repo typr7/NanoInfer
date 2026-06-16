@@ -19,7 +19,7 @@ namespace
 {
 
 constexpr std::size_t BF16_BYTES = sizeof(__nv_bfloat16);
-constexpr std::size_t WORKSPACE_BYTES = 64ull << 20;
+constexpr std::size_t WORKSPACE_BYTES = 2048ull << 20;
 
 constexpr std::size_t token_id_buffer_bytes()
 {

@@ -106,7 +106,8 @@ std::vector<std::int32_t> encode_prompt_with_budget(
     }
 
     if (dropped_history) {
-        std::cout << "[context] Older turns were dropped to fit the 512 token window.\n";
+        std::cout << "[context] Older turns were dropped to fit the "
+                  << MAX_TOKEN_LEN << " token window.\n";
     }
 
     return token_ids;
@@ -189,7 +190,8 @@ int main(int argc, char** argv)
 
             if (token_ids.empty() || token_ids.size() >= MAX_TOKEN_LEN) {
                 messages.pop_back();
-                std::cout << "Input is too long for the 512 token window.\n";
+                std::cout << "Input is too long for the "
+                          << MAX_TOKEN_LEN << " token window.\n";
                 continue;
             }
 

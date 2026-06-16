@@ -11,7 +11,7 @@
 #include "device_arena.hpp"
 
 inline constexpr int VOCAB_LEN     = 128256;
-inline constexpr int MAX_TOKEN_LEN = 512;
+inline constexpr int MAX_TOKEN_LEN = 4096;
 inline constexpr int HIDDEN_DIM    = 2048;
 inline constexpr int HEAD_DIM      = 64;
 inline constexpr int LAYER_NUM     = 16;
