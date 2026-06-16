@@ -2,6 +2,8 @@
 
 NanoInfer 是一个使用 C++17 和 CUDA 编写的轻量级大语言模型推理框架。它直接用 CUDA 实现了 `Llama-3.2-1B-Instruct` 所需的大部分算子，包括 token embedding、RMSNorm、RoPE、KV cache 更新、分组查询注意力（GQA）、causal softmax、SwiGLU、残差加法。
 
+![demo](pic/demo.gif)
+
 ## 当前支持范围
 
 - 模型：`meta-llama/Llama-3.2-1B-Instruct`

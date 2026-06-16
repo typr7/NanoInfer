@@ -2,6 +2,8 @@
 
 NanoInfer is a lightweight large language model inference framework written in C++17 and CUDA. It implements most of the operators required by `Llama-3.2-1B-Instruct` directly in CUDA, including token embedding, RMSNorm, RoPE, KV cache updates, grouped-query attention (GQA), causal softmax, SwiGLU, residual addition.
 
+![demo](pic/demo.gif)
+
 ## Current Scope
 
 - Model: `meta-llama/Llama-3.2-1B-Instruct`
