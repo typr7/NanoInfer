@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(tvllm LANGUAGES CXX CUDA)
+project(NanoInfer LANGUAGES CXX CUDA)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CUDA_STANDARD 17)
@@ -9,7 +9,7 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 
 include(cmake/dependencies.cmake)
 
-add_executable(tvllm
+add_executable(nano_infer
     src/kernels/grouped_query_attention.cu
     src/kernels/grouped_query_attention.h
     src/kernels/kv_cache.cu
@@ -44,9 +44,9 @@ add_executable(tvllm
     src/llama.h
 )
 
-target_link_libraries(tvllm PRIVATE CUDA::cudart)
+target_link_libraries(nano_infer PRIVATE CUDA::cudart)
 target_link_libraries(
-    tvllm PRIVATE
+    nano_infer PRIVATE
     CUDA::cudart
     CUDA::cublas
     nlohmann_json::nlohmann_json

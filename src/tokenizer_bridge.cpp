@@ -141,7 +141,7 @@ std::vector<std::int32_t> TokenizerBridge::encode_chat(
         });
     }
 
-    TempFile messages_file("tvllm_messages");
+    TempFile messages_file("nano_infer_messages");
     messages_file.write(message_array.dump());
 
     const std::string command = shell_quote(python_executable)
@@ -167,7 +167,7 @@ std::string TokenizerBridge::decode(const std::vector<std::int32_t>& token_ids) 
         return "";
     }
 
-    TempFile ids_file("tvllm_token_ids");
+    TempFile ids_file("nano_infer_token_ids");
     ids_file.write(json(token_ids).dump());
 
     const std::string command = shell_quote(python_executable)

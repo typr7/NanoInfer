@@ -1,16 +1,3 @@
-# from https://github.com/jmaczan/tiny-vllm/blob/main/python/tokenizer.py
-
-"""
-Tokenize text using HuggingFace tokenizers and dump token IDs.
-
-Usage:
-    python python/tokenizer.py "The capital of France is" --model meta-llama/Llama-3.2-1B
-    python python/tokenizer.py --decode --ids 791 6864 315 9822 374 --model meta-llama/Llama-3.2-1B
-    python python/tokenizer.py --chat-template --messages-file messages.json --model meta-llama/Llama-3.2-1B-Instruct
-
-The C++ engine reads/writes plain text files of token IDs.
-"""
-
 import argparse
 import json
 

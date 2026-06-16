@@ -1,48 +1,76 @@
-# Tiny vLLM v1 实现边界
-1. 支持 Llama-3.2-1B-Instruct 特定架构
-2. 最大 Token 长度 512
-3. hidden dim 固定为 2048
-4. head dim 固定为 64
-5. batch_size = 1
+# NanoInfer
 
-# Note
-## cublasGemmEx
-`cuBLAS` 假设矩阵是列主元的。`cublasGemmEx` 的计算形式是：$C_\text{col} = \alpha * \text{op}(A) * \text{op}(B) + \beta * C_\text{col}^\text{pre}$
+NanoInfer is a lightweight large language model inference framework written in C++17 and CUDA. It implements most of the operators required by `Llama-3.2-1B-Instruct` directly in CUDA, including token embedding, RMSNorm, RoPE, KV cache updates, grouped-query attention (GQA), causal softmax, SwiGLU, residual addition.
 
-`cublasGemmEx` 入参包含 `transa` 与 `transb`，接收输入 `CUBLAS_OP_T` / `CUBLAS_OP_N` / `CUBLAS_OP_C`。
-`cublasGemmEx` 总是按列主元解释内存，`CUBLAS_OP_T` 表示读入矩阵后转置，`CUBLAS_OP_N` 不转置，`CUBLAS_OP_C` 表示对复数矩阵共轭转置。
+## Current Scope
 
-首先思考一个操作，一个内存中的列主元矩阵 $C_\text{col}$，其规模为 $[L1, L2]$，我们可以将其的一列读成一行，这样一个矩阵就变成了一个行主元矩阵，且这个矩阵的规模为 $[L2, L1]$，相当于对做了一次矩阵转置。
+- Model: `meta-llama/Llama-3.2-1B-Instruct`
+- Weight format: Hugging Face SafeTensors
+- Inference mode: single-batch interactive chat with greedy decoding
+- Maximum context length: 4096 tokens
+- Data type: BF16 weights and intermediate tensors; FP32 is used where required by kernels or cuBLAS paths
 
-如果要计算 $C = A \times B^T$，在 `cublasGemmEx` 计算得到的结果应该是 $C_\text{col}^T$，这样我们可以用之前那个技巧得到 $C$。则在 `cublasGemmEx` 中的计算应该是 $C_\text{col}^T = B_\text{col} \times A_\text{col}$。
+## Roadmap
 
-设 $A: [M\times K], B: [N\times K]$，则 `cublasGemmEx` 的输入应该是：
+### P0
+
+- [x] Single-batch inference for Llama-3.2-1B-Instruct: SafeTensors weight loading, BF16 CUDA kernels, KV cache, and greedy decoding
+- [ ] Correctness validation: kernel unit tests and output alignment against PyTorch/Hugging Face
+- [ ] Benchmarking and profiling: report TTFT, decode tokens/s, memory usage, and Nsight Compute hotspots
+
+### P1
+
+- [ ] Batched prefill and batched decode
+- [ ] Continuous batching: dynamically add and remove requests with different prompt and generation lengths
+- [ ] KV cache management: evolve from a static contiguous cache to a paged/block-based KV cache
+- [ ] HTTP/gRPC demo server: expose a simple OpenAI-compatible chat/completions API
+
+### P2
+
+- [ ] Decode attention kernel optimization: reduce synchronization and global memory traffic, with before/after profiling results
+- [ ] Prefill attention optimization: replace the current per-head dense attention implementation
+- [ ] Kernel fusion: fuse hot paths such as RMSNorm, residual addition, and SwiGLU
+- [ ] CUDA Graph and stream optimization: reduce decode-step launch overhead
+
+### P3
+
+- [ ] Configuration-driven loading of Llama-family model parameters to reduce hard-coded assumptions
+- [ ] Support for additional Llama variants and similar architectures such as Qwen or Mistral
+- [ ] Weight-only INT8/INT4 quantized inference
+
+## Usage
+
+### Build
+
+1. Install the Python dependencies:
+
+```sh
+python3 -m pip install -r python/requirements.txt
 ```
-cublasGemmEx(
-    handle,
-    CUBLAS_OP_T,   // B_col^T
-    CUBLAS_OP_N,   // A_col
-    N,             // m: rows of C_col
-    M,             // n: cols of C_col
-    K,             // k
-    &alpha,
-    B, Btype, K,   // lda = K, because B_col is K x N
-    A, Atype, K,   // ldb = K, because A_col is K x M
-    &beta,
-    C, Ctype, N,   // ldc = N, because C_col is N x M
-    computeType,
-    algo
-);
+
+2. Configure and build the project:
+
+```sh
+cmake -S . -B build-release -DCMAKE_BUILD_TYPE=Release
+cmake --build build-release
 ```
 
-## Softmax
-$$
-p_i=\frac{e^{x_i}}{\sum_{j=0}^{N-1}e^{x_j}}
-$$
+### Prepare Model Weights
 
-原始公式在 FP16/BF16 下容易 overflow，所以用以下等价公式：
-$$
-p_i=\frac{e^{x_i-\max(x)}}{\sum_{j=0}^{N-1}e^{x_j-\max(x)}}
-$$
+NanoInfer currently supports only [Llama-3.2-1B-Instruct](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct). Support for additional models will be added later.
 
-这是数学上的计算
+To obtain the model weights, visit the model's [Hugging Face page](https://huggingface.co/meta-llama/Llama-3.2-1B-Instruct), request access, and download the weights after access is granted:
+
+```sh
+hf download meta-llama/Llama-3.2-1B-Instruct model.safetensors --local-dir model_weights
+```
+
+### Run
+
+```sh
+./build-release/nano_infer --weights model_weights/model.safetensors
+```
+
+## References
+
+This project was inspired by [jmaczan/tiny-vllm](https://github.com/jmaczan/tiny-vllm).
