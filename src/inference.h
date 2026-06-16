@@ -12,6 +12,14 @@
 
 struct InferenceContext
 {
+    InferenceContext();
+    ~InferenceContext() noexcept;
+
+    InferenceContext(const InferenceContext&) = delete;
+    InferenceContext& operator=(const InferenceContext&) = delete;
+    InferenceContext(InferenceContext&&) = delete;
+    InferenceContext& operator=(InferenceContext&&) = delete;
+
     cudaStream_t stream = nullptr;
     cublasHandle_t handle = nullptr;
 

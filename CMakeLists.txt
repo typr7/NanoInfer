@@ -29,6 +29,8 @@ add_executable(tvllm
     src/kernels/token_embedding.cu
     src/kernels/token_embedding.h
     src/helper.hpp
+    src/tokenizer_bridge.cpp
+    src/tokenizer_bridge.h
     src/llama_weights.cpp
     src/llama_weights.h
     src/cuda_device_buffer.cpp

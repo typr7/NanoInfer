@@ -18,6 +18,24 @@
 namespace
 {
 
+constexpr std::size_t BF16_BYTES = sizeof(__nv_bfloat16);
+constexpr std::size_t WORKSPACE_BYTES = 64ull << 20;
+
+constexpr std::size_t token_id_buffer_bytes()
+{
+    return static_cast<std::size_t>(MAX_TOKEN_LEN) * sizeof(std::int32_t);
+}
+
+constexpr std::size_t hidden_state_buffer_bytes()
+{
+    return static_cast<std::size_t>(MAX_TOKEN_LEN) * HIDDEN_DIM * BF16_BYTES;
+}
+
+constexpr std::size_t kv_cache_buffer_bytes()
+{
+    return static_cast<std::size_t>(LAYER_NUM) * MAX_TOKEN_LEN * 2 * K_PROJ_DIM * BF16_BYTES;
+}
+
 std::int32_t run_prefill_stage(
     const std::vector<std::int32_t>& input_token_ids,
     const Llama3_2& weights,
@@ -159,6 +177,44 @@ bool is_eot(std::int32_t token_id)
     return (token_id == 128001 || token_id == 128008 || token_id == 128009);
 }
 
+}
+
+InferenceContext::InferenceContext():
+    token_ids(token_id_buffer_bytes()),
+    next_token_id(sizeof(std::int32_t)),
+    hidden_state(hidden_state_buffer_bytes()),
+    kv_cache(kv_cache_buffer_bytes()),
+    workspace(WORKSPACE_BYTES)
+{
+    try {
+        CUDA_CHECK(cudaStreamCreate(&stream));
+        CUBLAS_CHECK(cublasCreate(&handle));
+    } catch (...) {
+        if (handle != nullptr) {
+            cublasDestroy(handle);
+            handle = nullptr;
+        }
+        if (stream != nullptr) {
+            cudaStreamDestroy(stream);
+            stream = nullptr;
+        }
+        throw;
+    }
+}
+
+InferenceContext::~InferenceContext() noexcept
+{
+    if (stream != nullptr) {
+        cudaStreamSynchronize(stream);
+    }
+    if (handle != nullptr) {
+        cublasDestroy(handle);
+        handle = nullptr;
+    }
+    if (stream != nullptr) {
+        cudaStreamDestroy(stream);
+        stream = nullptr;
+    }
 }
 
 std::size_t inference(
