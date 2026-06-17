@@ -30,9 +30,35 @@ struct InferenceContext
     DeviceArena workspace;
 };
 
+struct LogitTopKEntry
+{
+    std::int32_t token_id = 0;
+    float logit = 0.f;
+};
+
+struct InferenceStepTrace
+{
+    std::size_t step = 0;
+    std::vector<LogitTopKEntry> top_logits;
+    std::vector<float> final_norm;
+    std::vector<std::vector<float>> layer_hidden_states;
+};
+
+struct InferenceTrace
+{
+    std::size_t top_k = 0;
+    bool fp32_logits = false;
+    bool capture_final_norm = false;
+    std::size_t final_norm_step = 0;
+    bool capture_layer_hidden_states = false;
+    std::size_t layer_hidden_step = 0;
+    std::vector<InferenceStepTrace> steps;
+};
+
 std::size_t inference(
     std::vector<std::int32_t>& token_ids,
     const Llama3_2& weights,
     InferenceContext& context,
-    std::size_t max_new_tokens = MAX_TOKEN_LEN
+    std::size_t max_new_tokens = MAX_TOKEN_LEN,
+    InferenceTrace* trace = nullptr
 );

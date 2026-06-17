@@ -5,6 +5,7 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
+#include <utility>
 #include <vector>
 
 #define JSON_USE_IMPLICIT_CONVERSIONS 0
@@ -28,6 +29,12 @@ struct PromptOptions
     std::string prompt;
     std::size_t max_new_tokens = 16;
     bool dump_token_ids = false;
+    std::size_t dump_top_k = 0;
+    bool dump_top_k_fp32 = false;
+    bool dump_final_norm = false;
+    std::size_t dump_final_norm_step = 0;
+    bool dump_layer_hidden = false;
+    std::size_t dump_layer_hidden_step = 0;
 };
 
 bool file_exists(const std::string& path)
@@ -57,7 +64,11 @@ void print_usage(const char* program)
         << "  --tokenizer-model <name> HuggingFace tokenizer id/path\n"
         << "  --python <path>          Python executable (default: python3)\n"
         << "  --max-new-tokens <n>     generation limit for alignment runs (default: 16)\n"
-        << "  --dump-token-ids         print generated token IDs as JSON instead of decoded text\n";
+        << "  --dump-token-ids         print generated token IDs as JSON instead of decoded text\n"
+        << "  --dump-top-k <n>         print generated token IDs and per-step top-k logits as JSON\n"
+        << "  --dump-top-k-fp32 <n>    like --dump-top-k, but recompute traced logits as FP32\n"
+        << "  --dump-final-norm-step <n> include final RMSNorm state for generation step n\n"
+        << "  --dump-layer-hidden-step <n> include per-layer hidden states for generation step n\n";
 }
 
 std::size_t parse_size(const std::string& value, const std::string& option_name)
@@ -99,6 +110,17 @@ PromptOptions parse_options(int argc, char** argv)
             options.max_new_tokens = parse_size(require_value(arg), arg);
         } else if (arg == "--dump-token-ids") {
             options.dump_token_ids = true;
+        } else if (arg == "--dump-top-k") {
+            options.dump_top_k = parse_size(require_value(arg), arg);
+        } else if (arg == "--dump-top-k-fp32") {
+            options.dump_top_k = parse_size(require_value(arg), arg);
+            options.dump_top_k_fp32 = true;
+        } else if (arg == "--dump-final-norm-step") {
+            options.dump_final_norm_step = parse_size(require_value(arg), arg);
+            options.dump_final_norm = true;
+        } else if (arg == "--dump-layer-hidden-step") {
+            options.dump_layer_hidden_step = parse_size(require_value(arg), arg);
+            options.dump_layer_hidden = true;
         } else if (arg == "--help" || arg == "-h") {
             print_usage(argv[0]);
             std::exit(0);
@@ -143,14 +165,56 @@ int main(int argc, char** argv)
 
         std::vector<std::int32_t> token_ids = encode_prompt(tokenizer, options.prompt);
         const std::size_t prompt_token_count = token_ids.size();
-        inference(token_ids, weights, context, options.max_new_tokens);
+        InferenceTrace trace;
+        trace.top_k = options.dump_top_k;
+        trace.fp32_logits = options.dump_top_k_fp32;
+        trace.capture_final_norm = options.dump_final_norm;
+        trace.final_norm_step = options.dump_final_norm_step;
+        trace.capture_layer_hidden_states = options.dump_layer_hidden;
+        trace.layer_hidden_step = options.dump_layer_hidden_step;
+        inference(
+            token_ids,
+            weights,
+            context,
+            options.max_new_tokens,
+            (options.dump_top_k > 0 || options.dump_final_norm || options.dump_layer_hidden) ? &trace : nullptr
+        );
 
         std::vector<std::int32_t> generated_ids(
             token_ids.begin() + static_cast<std::ptrdiff_t>(prompt_token_count),
             token_ids.end()
         );
 
-        if (options.dump_token_ids) {
+        if (options.dump_top_k > 0 || options.dump_final_norm || options.dump_layer_hidden) {
+            nlohmann::json trace_json = nlohmann::json::array();
+            for (const InferenceStepTrace& step_trace: trace.steps) {
+                nlohmann::json top_logits = nlohmann::json::array();
+                for (const LogitTopKEntry& entry: step_trace.top_logits) {
+                    top_logits.push_back({
+                        {"token_id", entry.token_id},
+                        {"logit", entry.logit},
+                    });
+                }
+                nlohmann::json step_json = {
+                    {"step", step_trace.step},
+                    {"top_logits", std::move(top_logits)},
+                };
+                if (!step_trace.final_norm.empty()) {
+                    step_json["final_norm"] = step_trace.final_norm;
+                }
+                if (!step_trace.layer_hidden_states.empty()) {
+                    step_json["layer_hidden_states"] = step_trace.layer_hidden_states;
+                }
+                trace_json.push_back(std::move(step_json));
+            }
+
+            std::cout << nlohmann::json({
+                {"generated_token_ids", generated_ids},
+                {"logit_dtype", options.dump_top_k_fp32 ? "fp32" : "bf16"},
+                {"top_k", options.dump_top_k},
+                {"trace", std::move(trace_json)},
+            }).dump() << '\n';
+        } else if (options.dump_token_ids) {
             std::cout << nlohmann::json(generated_ids).dump() << '\n';
         } else {
             std::cout << tokenizer.decode(generated_ids) << '\n';

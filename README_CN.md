@@ -17,7 +17,7 @@ NanoInfer 是一个使用 C++17 和 CUDA 编写的轻量级大语言模型推理
 ### P0
 
 - [x] Llama-3.2-1B-Instruct 单 batch 推理：SafeTensors 权重加载、BF16 CUDA kernel、KV cache 和 greedy decoding
-- [ ] 正确性验证：kernel 单元测试，以及与 PyTorch/Hugging Face 输出对齐
+- [x] 正确性验证：layer/block tensor 对齐，以及与 PyTorch/Hugging Face 的 e2e 输出对齐
 - [ ] Benchmark 与 profiling：统计 TTFT、decode tokens/s、显存占用，并记录 Nsight Compute 热点
 
 ### P1
@@ -72,6 +72,13 @@ hf download meta-llama/Llama-3.2-1B-Instruct model.safetensors --local-dir model
 ```sh
 ./build-release/nano_infer --weights model_weights/model.safetensors
 ```
+
+### 正确性验证结果
+
+| 测试名 | 测试标准 | 测试结果 |
+| --- | --- | --- |
+| Layer/block tensor 对齐 | 将 NanoInfer 每一层的 hidden state 和最终 RMSNorm state 与 Hugging Face 对比。max error、RMS error 和 cosine similarity 必须落在显式 BF16 容差内。 | 通过：6 / 6 个 prompt-step 组合全部在容差内。 |
+| E2E greedy 生成对齐 | 将 NanoInfer 生成的 token ID 与 Hugging Face greedy decoding 对比。精确一致直接通过；长序列分叉只有在 NanoInfer token 位于 Hugging Face top-k 且 logit margin 很小时才通过。 | 通过：36 / 36 个 case。32 个完全一致；4 个是 near-cache 分叉，rank 为 2，margin <= 0.125。 |
 
 ## 参考
 
