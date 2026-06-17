@@ -1,6 +1,7 @@
 #pragma once
 
 
+#include <cstddef>
 #include <vector>
 #include <cstdint>
 
@@ -30,8 +31,26 @@ struct InferenceContext
     DeviceArena workspace;
 };
 
+struct InferenceBenchmarkResult
+{
+    std::size_t prompt_tokens = 0;
+    std::size_t generated_tokens = 0;
+    std::size_t decode_tokens = 0;
+    double ttft_ms = 0.0;
+    double tpot_ms = 0.0;
+    double decode_ms_total = 0.0;
+    bool stopped_eos = false;
+};
+
 std::size_t inference(
     std::vector<std::int32_t>& token_ids,
     const Llama3_2& weights,
     InferenceContext& context
+);
+
+InferenceBenchmarkResult inference_benchmark(
+    std::vector<std::int32_t>& token_ids,
+    const Llama3_2& weights,
+    InferenceContext& context,
+    std::size_t max_new_tokens
 );

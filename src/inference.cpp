@@ -1,6 +1,7 @@
 #include <vector>
 #include <cstdint>
 #include <algorithm>
+#include <chrono>
 
 #include <cuda_runtime.h>
 #include <cuda_bf16.h>
@@ -243,4 +244,65 @@ std::size_t inference(
     }
 
     return token_count - input_token_count;
+}
+
+InferenceBenchmarkResult inference_benchmark(
+    std::vector<std::int32_t>& token_ids,
+    const Llama3_2& weights,
+    InferenceContext& context,
+    std::size_t max_new_tokens
+) {
+    InferenceBenchmarkResult result;
+    result.prompt_tokens = token_ids.size();
+
+    const std::size_t input_token_count = token_ids.size();
+    if (max_new_tokens == 0 || input_token_count == 0 || input_token_count >= MAX_TOKEN_LEN) {
+        return result;
+    }
+
+    using Clock = std::chrono::steady_clock;
+    const auto prefill_start = Clock::now();
+    std::int32_t token_id = run_prefill_stage(token_ids, weights, context);
+    const auto prefill_end = Clock::now();
+
+    result.ttft_ms = std::chrono::duration<double, std::milli>(
+        prefill_end - prefill_start
+    ).count();
+
+    if (is_eot(token_id)) {
+        result.stopped_eos = true;
+        return result;
+    }
+
+    token_ids.push_back(token_id);
+    result.generated_tokens = 1;
+
+    std::size_t token_count = input_token_count + 1;
+    while (
+        result.generated_tokens < max_new_tokens
+        && token_count < static_cast<std::size_t>(MAX_TOKEN_LEN)
+    ) {
+        const auto decode_start = Clock::now();
+        token_id = run_decode_step(token_count, weights, context);
+        const auto decode_end = Clock::now();
+
+        if (is_eot(token_id)) {
+            result.stopped_eos = true;
+            break;
+        }
+
+        result.decode_ms_total += std::chrono::duration<double, std::milli>(
+            decode_end - decode_start
+        ).count();
+        result.decode_tokens += 1;
+        token_ids.push_back(token_id);
+        result.generated_tokens += 1;
+        token_count += 1;
+    }
+
+    if (result.decode_tokens > 0) {
+        result.tpot_ms = result.decode_ms_total / static_cast<double>(result.decode_tokens);
+    }
+
+    return result;
 }
