@@ -17,7 +17,7 @@ NanoInfer is a lightweight large language model inference framework written in C
 ### P0
 
 - [x] Single-batch inference for Llama-3.2-1B-Instruct: SafeTensors weight loading, BF16 CUDA kernels, KV cache, and greedy decoding
-- [x] Correctness validation: layer/block tensor alignment and e2e output alignment against PyTorch/Hugging Face
+- [x] Correctness validation: verify layer/block tensors and end-to-end greedy token sequences against PyTorch/Hugging Face
 - [ ] Benchmarking and profiling: report TTFT, decode tokens/s, memory usage, and Nsight Compute hotspots
 
 ### P1
@@ -77,8 +77,8 @@ hf download meta-llama/Llama-3.2-1B-Instruct model.safetensors --local-dir model
 
 | Test Name | Test Standard | Test Result |
 | --- | --- | --- |
-| Layer/block tensor alignment | Compare NanoInfer per-layer hidden states and final RMSNorm states with Hugging Face. Values must stay within explicit BF16 tolerances for max error, RMS error, and cosine similarity. | Passed: 6 / 6 prompt-step pairs. All checked tensors stayed within tolerance. |
-| E2E greedy generation alignment | Compare generated token IDs with Hugging Face greedy decoding. Exact matches pass directly; long-sequence divergences pass only when the NanoInfer token is in Hugging Face top-k with a small logit margin. | Passed: 36 / 36 cases. 32 matched exactly; 4 were accepted as near-cache divergences with rank 2 and margin <= 0.125. |
+| Layer/block tensor alignment validation | Compare NanoInfer per-layer hidden states and final RMSNorm states with Hugging Face. Values must stay within explicit BF16 tolerances for max error, RMS error, and cosine similarity. | Passed: 6 / 6 prompt-step pairs. All checked tensors stayed within tolerance. |
+| E2E greedy token sequence validation | Compare generated token IDs with Hugging Face greedy decoding. Exact matches pass directly; long-sequence divergences pass only when the NanoInfer token is in Hugging Face top-k with a small logit margin. | Passed: 36 / 36 cases. 32 matched exactly; 4 were accepted as near-cache divergences with rank 2 and margin <= 0.125. |
 
 ## References
 
