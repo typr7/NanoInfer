@@ -33,5 +33,6 @@ struct InferenceContext
 std::size_t inference(
     std::vector<std::int32_t>& token_ids,
     const Llama3_2& weights,
-    InferenceContext& context
+    InferenceContext& context,
+    std::size_t max_new_tokens = MAX_TOKEN_LEN
 );

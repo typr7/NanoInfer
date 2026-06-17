@@ -220,10 +220,11 @@ InferenceContext::~InferenceContext() noexcept
 std::size_t inference(
     std::vector<std::int32_t>& token_ids,
     const Llama3_2& weights,
-    InferenceContext& context
+    InferenceContext& context,
+    std::size_t max_new_tokens
 ) {
     const std::size_t input_token_count = token_ids.size();
-    if (input_token_count == 0 || input_token_count >= MAX_TOKEN_LEN) {
+    if (input_token_count == 0 || input_token_count >= MAX_TOKEN_LEN || max_new_tokens == 0) {
         return 0;
     }
 
@@ -232,15 +233,16 @@ std::size_t inference(
         return 0;
     }
     token_ids.push_back(token_id);
+    std::size_t generated_count = 1;
 
-    std::size_t token_count = input_token_count + 1;
-    for (; token_count < MAX_TOKEN_LEN; token_count++) {
-        token_id = run_decode_step(token_count, weights, context);
+    while (generated_count < max_new_tokens && token_ids.size() < MAX_TOKEN_LEN) {
+        token_id = run_decode_step(token_ids.size(), weights, context);
         if (is_eot(token_id)) {
             break;
         }
         token_ids.push_back(token_id);
+        generated_count++;
     }
 
-    return token_count - input_token_count;
+    return generated_count;
 }

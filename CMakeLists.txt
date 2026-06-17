@@ -9,7 +9,7 @@ set(CMAKE_CUDA_ARCHITECTURES 89)
 
 include(cmake/dependencies.cmake)
 
-add_executable(nano_infer
+set(NANOINFER_CORE_SOURCES
     src/kernels/grouped_query_attention.cu
     src/kernels/grouped_query_attention.h
     src/kernels/kv_cache.cu
@@ -36,7 +36,6 @@ add_executable(nano_infer
     src/cuda_device_buffer.cpp
     src/cuda_device_buffer.h
     src/device_arena.hpp
-    src/main.cpp
     src/inference.cpp
     src/inference.h
     src/macro.h
@@ -44,10 +43,24 @@ add_executable(nano_infer
     src/llama.h
 )
 
-target_link_libraries(nano_infer PRIVATE CUDA::cudart)
+add_library(nano_infer_core STATIC ${NANOINFER_CORE_SOURCES})
+target_include_directories(nano_infer_core PUBLIC src)
 target_link_libraries(
-    nano_infer PRIVATE
+    nano_infer_core PUBLIC
     CUDA::cudart
     CUDA::cublas
     nlohmann_json::nlohmann_json
 )
+
+add_executable(nano_infer src/main.cpp)
+target_link_libraries(nano_infer PRIVATE nano_infer_core)
+
+add_executable(nano_infer_prompt tools/run_prompt.cpp)
+target_link_libraries(nano_infer_prompt PRIVATE nano_infer_core)
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(kernel_unit_tests tests/kernel_unit_tests.cu)
+    target_link_libraries(kernel_unit_tests PRIVATE nano_infer_core)
+    add_test(NAME kernel_unit_tests COMMAND kernel_unit_tests)
+endif()
