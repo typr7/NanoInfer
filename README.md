@@ -18,7 +18,7 @@ NanoInfer is a lightweight large language model inference framework written in C
 
 - [x] Single-batch inference for Llama-3.2-1B-Instruct: SafeTensors weight loading, BF16 CUDA kernels, KV cache, and greedy decoding
 - [x] Correctness validation: verify layer/block tensors and end-to-end greedy token sequences against PyTorch/Hugging Face
-- [ ] Benchmarking and profiling: report TTFT, decode tokens/s, memory usage, and Nsight Compute hotspots
+- [x] Benchmarking: report TTFT, TPOT
 
 ### P1
 
@@ -73,7 +73,34 @@ hf download meta-llama/Llama-3.2-1B-Instruct model.safetensors --local-dir model
 ./build-release/nano_infer --weights model_weights/model.safetensors
 ```
 
-### Correctness Validation Results
+## Benchmark
+
+See [benchmark_ttft_tpot.py](https://github.com/typr7/NanoInfer/blob/benchmark-ttft-tpot/benchmarks/benchmark_ttft_tpot.py) for benchmark.
+
+Test Configuration:
+
+- Hardware: RTX 4060 Laptop GPU (8GB)
+- Model: Llama-3.2-1B-Instruct
+- Batch Size: 1
+- Input Lengths: 128, 512, 1024 tokens
+- Output Length: 256 tokens
+- Warmup Runs: 3
+- Measured Runs: 10
+- Decoding: greedy
+- Timing: model loading and tokenization excluded
+
+Performance Results:
+
+| Input Tokens | Inference Engine | TTFT (ms) | TPOT (ms/token) |
+| ---: | --- | ---: | ---: |
+| 128 | transformers | **18.098** | 14.140 |
+| 128 | NanoInfer | 21.381 | **11.054** |
+| 512 | transformers | **53.660** | 15.134 |
+| 512 | NanoInfer | 54.957 | **11.582** |
+| 1024 | transformers | 108.003 | 14.980 |
+| 1024 | NanoInfer | **102.190** | **12.519** |
+
+## Correctness Validation
 
 | Test Name | Test Standard | Test Result |
 | --- | --- | --- |

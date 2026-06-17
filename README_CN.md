@@ -12,13 +12,13 @@ NanoInfer 是一个使用 C++17 和 CUDA 编写的轻量级大语言模型推理
 - 最大上下文长度：4096 tokens
 - 数据类型：权重和中间张量使用 BF16；kernel 或 cuBLAS 路径需要时使用 FP32 计算
 
-## Roadmap
+## 路线图
 
 ### P0
 
 - [x] Llama-3.2-1B-Instruct 单 batch 推理：SafeTensors 权重加载、BF16 CUDA kernel、KV cache 和 greedy decoding
 - [x] 正确性验证：验证 layer/block tensor 和端到端 greedy token 序列是否与 PyTorch/Hugging Face 一致
-- [ ] Benchmark 与 profiling：统计 TTFT、decode tokens/s、显存占用，并记录 Nsight Compute 热点
+- [x] Benchmark：报告 TTFT、TPOT
 
 ### P1
 
@@ -73,7 +73,34 @@ hf download meta-llama/Llama-3.2-1B-Instruct model.safetensors --local-dir model
 ./build-release/nano_infer --weights model_weights/model.safetensors
 ```
 
-### 正确性验证结果
+## Benchmark
+
+Benchmark 代码见 [benchmark_ttft_tpot.py](https://github.com/typr7/NanoInfer/blob/benchmark-ttft-tpot/benchmarks/benchmark_ttft_tpot.py)。
+
+测试配置：
+
+- 硬件：RTX 4060 Laptop GPU (8GB)
+- 模型：Llama-3.2-1B-Instruct
+- Batch Size：1
+- 输入长度：128、512、1024 tokens
+- 输出长度：256 tokens
+- Warmup Runs：3
+- Measured Runs：10
+- 解码方式：greedy
+- 计时：不包含模型加载和 tokenization
+
+性能结果：
+
+| 输入 Tokens | 推理引擎 | TTFT (ms) | TPOT (ms/token) |
+| ---: | --- | ---: | ---: |
+| 128 | transformers | **18.098** | 14.140 |
+| 128 | NanoInfer | 21.381 | **11.054** |
+| 512 | transformers | **53.660** | 15.134 |
+| 512 | NanoInfer | 54.957 | **11.582** |
+| 1024 | transformers | 108.003 | 14.980 |
+| 1024 | NanoInfer | **102.190** | **12.519** |
+
+## 正确性验证
 
 | 测试名 | 测试标准 | 测试结果 |
 | --- | --- | --- |
