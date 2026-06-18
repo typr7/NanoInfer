@@ -14,31 +14,13 @@ NanoInfer 是一个使用 C++17 和 CUDA 编写的轻量级大语言模型推理
 
 ## 路线图
 
-### P0
-
 - [x] Llama-3.2-1B-Instruct 单 batch 推理：SafeTensors 权重加载、BF16 CUDA kernel、KV cache 和 greedy decoding
 - [x] 正确性验证：验证 layer/block tensor 和端到端 greedy token 序列是否与 PyTorch/Hugging Face 一致
 - [x] Benchmark：报告 TTFT、TPOT
-
-### P1
-
-- [ ] Batched prefill 和 batched decode
-- [ ] Continuous batching：动态加入和移除请求，支持不同 prompt/generation 长度
-- [ ] KV cache 管理：从静态连续缓存演进到 paged/block-based KV cache
-- [ ] HTTP/gRPC demo server：暴露简单的 OpenAI-compatible chat/completions API
-
-### P2
-
-- [ ] Decode attention kernel 优化：减少同步和全局内存访问，并给出 profiling 前后对比
-- [ ] Prefill attention 优化：替换当前按 head 执行 dense attention 的实现
-- [ ] Kernel fusion：融合 RMSNorm、residual、SwiGLU 等热点路径
-- [ ] CUDA Graph 和 stream 优化：降低 decode step 的 launch overhead
-
-### P3
-
-- [ ] 配置驱动地加载 Llama-family 模型参数，减少硬编码假设
-- [ ] 支持更多 Llama 变体，以及 Qwen、Mistral 等结构相近的模型
+- [ ] FlashAttention
+- [ ] Continuous Batching + PagedAttention
 - [ ] Weight-only INT8/INT4 量化推理
+- [ ] ...
 
 ## 使用方法
 

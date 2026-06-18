@@ -14,31 +14,13 @@ NanoInfer is a lightweight large language model inference framework written in C
 
 ## Roadmap
 
-### P0
-
 - [x] Single-batch inference for Llama-3.2-1B-Instruct: SafeTensors weight loading, BF16 CUDA kernels, KV cache, and greedy decoding
 - [x] Correctness validation: verify layer/block tensors and end-to-end greedy token sequences against PyTorch/Hugging Face
 - [x] Benchmarking: report TTFT, TPOT
-
-### P1
-
-- [ ] Batched prefill and batched decode
-- [ ] Continuous batching: dynamically add and remove requests with different prompt and generation lengths
-- [ ] KV cache management: evolve from a static contiguous cache to a paged/block-based KV cache
-- [ ] HTTP/gRPC demo server: expose a simple OpenAI-compatible chat/completions API
-
-### P2
-
-- [ ] Decode attention kernel optimization: reduce synchronization and global memory traffic, with before/after profiling results
-- [ ] Prefill attention optimization: replace the current per-head dense attention implementation
-- [ ] Kernel fusion: fuse hot paths such as RMSNorm, residual addition, and SwiGLU
-- [ ] CUDA Graph and stream optimization: reduce decode-step launch overhead
-
-### P3
-
-- [ ] Configuration-driven loading of Llama-family model parameters to reduce hard-coded assumptions
-- [ ] Support for additional Llama variants and similar architectures such as Qwen or Mistral
+- [ ] FlashAttention
+- [ ] Continuous Batching + PagedAttention
 - [ ] Weight-only INT8/INT4 quantized inference
+- [ ] ...
 
 ## Usage
 
