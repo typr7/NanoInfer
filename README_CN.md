@@ -61,11 +61,11 @@ Benchmark 代码见 [benchmark_ttft_tpot.py](https://github.com/typr7/NanoInfer/
 
 测试配置：
 
-- 硬件：RTX 4060 Laptop GPU (8GB)
+- 硬件：NVIDIA GeForce RTX 5090 (32GB)
 - 模型：Llama-3.2-1B-Instruct
 - Batch Size：1
 - 输入长度：128、512、1024 tokens
-- 输出长度：256 tokens
+- 最大输出长度：256 tokens
 - Warmup Runs：3
 - Measured Runs：10
 - 解码方式：greedy
@@ -75,12 +75,12 @@ Benchmark 代码见 [benchmark_ttft_tpot.py](https://github.com/typr7/NanoInfer/
 
 | 输入 Tokens | 推理引擎 | TTFT (ms) | TPOT (ms/token) |
 | ---: | --- | ---: | ---: |
-| 128 | transformers | **18.098** | 14.140 |
-| 128 | NanoInfer | 21.381 | **11.054** |
-| 512 | transformers | **53.660** | 15.134 |
-| 512 | NanoInfer | 54.957 | **11.582** |
-| 1024 | transformers | 108.003 | 14.980 |
-| 1024 | NanoInfer | **102.190** | **12.519** |
+| 128 | transformers | 7.842 | 7.105 |
+| 128 | NanoInfer | **6.341** | **2.448** |
+| 512 | transformers | **9.272** | 7.101 |
+| 512 | NanoInfer | 10.003 | **3.063** |
+| 1024 | transformers | **16.276** | 7.182 |
+| 1024 | NanoInfer | 16.580 | **4.011** |
 
 ## 正确性验证
 
